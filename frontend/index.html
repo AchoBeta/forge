@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forge - 基于生成式AI的思维导图系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔥 Forge 羲图系统</h1>
+            <p class="subtitle">基于生成式AI的思维导图系统</p>
+        </header>
+
+        <div class="control-panel">
+            <div class="input-group">
+                <label for="topic">输入主题：</label>
+                <input 
+                    type="text" 
+                    id="topic" 
+                    placeholder="例如：人工智能、机器学习、Web开发..." 
+                    value="人工智能"
+                />
+            </div>
+
+            <div class="settings-group">
+                <div class="setting-item">
+                    <label for="depth">深度：</label>
+                    <input type="number" id="depth" min="1" max="5" value="3" />
+                </div>
+                <div class="setting-item">
+                    <label for="branches">分支数：</label>
+                    <input type="number" id="branches" min="1" max="8" value="3" />
+                </div>
+            </div>
+
+            <button id="generateBtn" class="btn-generate">
+                <span class="btn-text">生成思维导图</span>
+                <span class="btn-loading" style="display: none;">生成中...</span>
+            </button>
+        </div>
+
+        <div class="mindmap-container">
+            <div id="mindmap" class="mindmap"></div>
+        </div>
+
+        <div class="info-panel">
+            <div class="info-item">
+                <strong>系统说明：</strong>
+                <p>这是一个基于生成式AI的智能思维导图系统，能够根据输入的主题自动生成结构化的思维导图。</p>
+            </div>
+            <div class="info-item">
+                <strong>使用方法：</strong>
+                <ol>
+                    <li>在输入框中输入您想要展开的主题</li>
+                    <li>调整深度和分支数参数</li>
+                    <li>点击"生成思维导图"按钮</li>
+                    <li>系统将自动生成可视化的思维导图</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <footer>
+        <p>AchoBeta Forge 羲图系统 © 2025 | AI-Powered Mind Mapping</p>
+    </footer>
+
+    <script src="app.js"></script>
+</body>
+</html>
