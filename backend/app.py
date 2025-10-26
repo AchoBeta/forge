@@ -48,8 +48,9 @@ class MindMapResponse(BaseModel):
 
 def generate_mindmap_with_ai(topic: str, depth: int = 3, branches: int = 3) -> MindMapNode:
     """
-    Generate mind map using AI logic
+    Generate mind map using template-based generation
     This is a simplified implementation that can be extended with actual AI models
+    (OpenAI GPT, local LLMs, etc.) in production
     """
     
     # AI-powered mind map generation logic
@@ -75,11 +76,12 @@ def generate_mindmap_with_ai(topic: str, depth: int = 3, branches: int = 3) -> M
 
 def generate_subtopics(parent_topic: str, level: int, count: int) -> List[str]:
     """
-    Generate subtopics based on the parent topic
-    This simulates AI-generated content
+    Generate subtopics based on the parent topic using templates
+    This is a template-based approach that can be replaced with actual AI
+    models (OpenAI GPT, ChatGLM, LLaMA, etc.) in production
     """
-    # AI-powered subtopic generation
-    # This is a simplified version - in production, use actual AI models
+    # Template-based subtopic generation
+    # In production, replace with actual AI model API calls
     
     topic_templates = {
         0: {  # First level

@@ -6,6 +6,10 @@
 // API Configuration
 const API_BASE_URL = 'http://localhost:8000';
 
+// Layout Configuration
+const INITIAL_RADIUS = 200;        // Initial radius for node positioning
+const RADIUS_REDUCTION_FACTOR = 0.7;  // Factor to reduce radius at each level
+
 // DOM Elements
 const topicInput = document.getElementById('topic');
 const depthInput = document.getElementById('depth');
@@ -141,7 +145,7 @@ function calculateNodePositions(rootNode) {
         if (node.children && node.children.length > 0) {
             const childCount = node.children.length;
             const angleStep = (Math.PI * 2) / childCount;
-            const nextRadius = radius * 0.7;
+            const nextRadius = radius * RADIUS_REDUCTION_FACTOR;
             
             node.children.forEach((child, index) => {
                 const childAngle = angle + (index - (childCount - 1) / 2) * angleStep;
@@ -152,7 +156,7 @@ function calculateNodePositions(rootNode) {
         }
     }
     
-    traverse(rootNode, rootX, rootY, 0, 200, 0, null);
+    traverse(rootNode, rootX, rootY, 0, INITIAL_RADIUS, 0, null);
     return positions;
 }
 
