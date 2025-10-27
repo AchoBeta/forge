@@ -37,9 +37,10 @@ func GetNewSpan(ctx context.Context, spanName string, spanType constant.LoopSpan
 	return sCtx, sp
 }
 
-func SetSpanInputAndOutInputWithFinish(ctx context.Context, sp cozeloop.Span, input, output any) {
+func SetSpanAllInOne(ctx context.Context, sp cozeloop.Span, input, output any, err error) {
 	sp.SetInput(ctx, input)
 	sp.SetOutput(ctx, output)
+	sp.SetError(ctx, err)
 	sp.Finish(ctx)
 	client.Flush(ctx) // todo这样会有性能问题，但是我们量级太小了无所谓
 }

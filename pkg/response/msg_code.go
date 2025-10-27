@@ -1,11 +1,12 @@
 package response
 
 import (
-	"context"
+	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 type JsonMsgResponse struct {
-	Ctx *context.Context
+	Ctx *gin.Context
 }
 
 type JsonMsgResult struct {
@@ -19,7 +20,7 @@ const SUCCESS_CODE = 200
 const SUCCESS_MSG = "成功"
 const ERROR_MSG = "错误"
 
-func NewResponse(c *context.Context) *JsonMsgResponse {
+func NewResponse(c *gin.Context) *JsonMsgResponse {
 	return &JsonMsgResponse{Ctx: c}
 }
 
@@ -28,7 +29,7 @@ func (r *JsonMsgResponse) Success(data interface{}) {
 	res.Code = SUCCESS_CODE
 	res.Message = SUCCESS_MSG
 	res.Data = data
-	//r.Ctx.JSON(http.StatusOK, res) //todo 适配Gin写法
+	r.Ctx.JSON(http.StatusOK, res)
 }
 
 func (r *JsonMsgResponse) Error(mc MsgCode) {
@@ -43,5 +44,7 @@ func (r *JsonMsgResponse) error(code int, message string) {
 	res.Code = code
 	res.Message = message
 	res.Data = nilStruct{}
-	//r.Ctx.JSON(http.StatusOK, res) //todo 适配Gin写法
+	r.Ctx.JSON(http.StatusOK, res)
 }
+
+// todo这里能不能做一个allInOne函数?

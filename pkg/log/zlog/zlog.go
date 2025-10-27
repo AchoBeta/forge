@@ -119,3 +119,11 @@ func CtxPanicf(ctx context.Context, format string, v ...interface{}) {
 func CtxFatalf(ctx context.Context, format string, v ...interface{}) {
 	withContext(ctx).Fatal(fmt.Sprintf(format, v...))
 }
+
+func CtxAllInOne(ctx context.Context, action string, input, output any, err error) {
+	if err != nil {
+		withContext(ctx).Error(action+" failed", zap.Any("input", input), zap.Any("output", output), zap.Error(err))
+	} else {
+		withContext(ctx).Info(action+" succeed", zap.Any("input", input), zap.Any("output", output))
+	}
+}

@@ -19,3 +19,6 @@ func MustInitDatabase(config configs.IConfig) {
 		panic(fmt.Sprintf("no require driver:%s", config.GetDBConfig().Driver))
 	}
 }
+func ForgeDB() *gorm.DB {
+	return db
+}

@@ -7,9 +7,16 @@ import (
 )
 
 type User struct {
-	UserID string
-	Name   string
+	UserID   string
+	Name     string
+	Password string
+	Dogs     []*Dog
 	// ... ex
+}
+
+type Dog struct {
+	DogID   string
+	DogName string
 }
 
 type userCtxKey struct{}
