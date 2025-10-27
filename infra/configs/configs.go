@@ -16,7 +16,7 @@ type IConfig interface {
 }
 
 var (
-	conf *config
+	conf = new(config)
 )
 
 func Config() IConfig {

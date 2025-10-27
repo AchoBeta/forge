@@ -19,6 +19,7 @@ func Init() {
 	// load env
 	path := initPath()
 	introduce()
+	log.InitLog(path, configs.Config())
 	configs.MustInit(path)
 	log.InitLog(path, configs.Config())
 	database.MustInitDatabase(configs.Config())
