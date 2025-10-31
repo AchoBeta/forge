@@ -7,6 +7,8 @@ import (
 	"forge/pkg/log/zlog"
 	"forge/pkg/loop"
 	"forge/pkg/response"
+	"net/http"
+
 	"github.com/gin-gonic/gin"
 )
 
@@ -38,5 +40,42 @@ func Login() gin.HandlerFunc {
 			r.Success(rsp)
 		}
 		return
+	}
+}
+
+// Register
+//
+//	@Description:[POST] /api/biz/v1/user/register
+//	@return gin.HandlerFunc
+func Register() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		req := &def.RegisterReq{}
+		// 统一从 gin 上下文取出 request 的 context，供后续业务调用使用
+		ctx := gCtx.Request.Context()
+		if err := gCtx.ShouldBindJSON(req); err != nil {
+			r := response.NewResponse(gCtx)
+			r.Error(response.USER_NOT_LOGIN) //USER_NOT_LOGIN  = MsgCode{Code: 2001, Msg: "用户未登录"}
+			return
+		}
+
+		rsp, err := handler.GetHandler().Register(ctx, req)
+
+		if err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.USER_NOT_LOGIN.Code, Message: response.USER_NOT_LOGIN.Msg, Data: struct{}{}})
+			return
+		}
+		gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.SUCCESS_CODE, Message: response.SUCCESS_MSG, Data: rsp})
+	}
+}
+
+// ResetPassword
+//
+//	@Description:[POST] /api/biz/v1/user/reset-password
+//	@return gin.HandlerFunc
+func ResetPassword() gin.HandlerFunc {
+	return func(ctx *gin.Context) {
+		// 将前端json映射到PesetPasswordReq
+
+		//
 	}
 }

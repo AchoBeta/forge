@@ -41,3 +41,39 @@ func (h *Handler) Login(ctx context.Context, req *def.LoginReq) (rsp *def.LoginR
 	rsp.User = userDto
 	return
 }
+
+func (h *Handler) Register(ctx context.Context, req *def.RegisterReq) (rsp *def.RegisterResp, err error) {
+	//
+
+	// DTO -> Service 层表单
+	params := caster.CastRegisterReq2Params(req)
+
+	// 请求限流、验证验证码等 占位
+
+	// -------------------------
+
+	// 向下调用服务层
+	_, err = h.UserService.Register(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	rsp = &def.RegisterResp{}
+	return rsp, nil
+}
+
+func (h *Handler) ResetPassword(ctx context.Context, req *def.ResetPasswordReq) (rsp *def.ResetPasswordResp, err error) {
+	// DTO -> Service 层表单
+	params := caster.CastResetPasswordReq2Params(req)
+
+	// 向下调用服务层 重置密码函数
+	err = h.UserService.ResetPassword(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	rsp = &def.ResetPasswordResp{
+		Success: true,
+	}
+	return rsp, nil
+}

@@ -8,6 +8,12 @@ import (
 
 type IHandler interface {
 	Login(ctx context.Context, req *def.LoginReq) (rsp *def.LoginResp, err error)
+
+	// Register: 注册 暂无第三方
+	Register(ctx context.Context, req *def.RegisterReq) (rsp *def.RegisterResp, err error)
+
+	// ResetPassword: 重置密码
+	ResetPassword(ctx context.Context, req *def.ResetPasswordReq) (rsp *def.ResetPasswordResp, err error)
 }
 
 var handler IHandler

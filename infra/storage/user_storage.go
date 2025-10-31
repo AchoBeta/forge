@@ -5,6 +5,7 @@ import (
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/infra/database"
+
 	"gorm.io/gorm"
 )
 
@@ -33,3 +34,5 @@ func (u *userPersistence) CreateUser(ctx context.Context, user *entity.User) err
 	}
 	return nil
 }
+
+// 其他仓储
