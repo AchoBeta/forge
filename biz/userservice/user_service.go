@@ -3,7 +3,6 @@ package userservice
 import (
 	"context"
 	"errors"
-	"fmt"
 	"forge/biz/adapter"
 	"forge/biz/entity"
 	"forge/biz/repo"
@@ -15,6 +14,18 @@ import (
 var (
 	// ErrUserNotFound 表示用户不存在
 	ErrUserNotFound = errors.New("user not found")
+	// ErrUserAlreadyExists 表示账号已存在
+	ErrUserAlreadyExists = errors.New("user already exists")
+	// ErrInvalidParams 表示参数无效
+	ErrInvalidParams = errors.New("invalid params")
+	// ErrPasswordMismatch 表示密码不一致
+	ErrPasswordMismatch = errors.New("password mismatch")
+	// ErrCredentialsIncorrect 表示账号或密码错误
+	ErrCredentialsIncorrect = errors.New("credentials incorrect")
+	// ErrUnsupportedAccountType 表示不支持的账号类型
+	ErrUnsupportedAccountType = errors.New("unsupported account type")
+	// ErrInternalError 表示内部错误
+	ErrInternalError = errors.New("internal error")
 )
 
 // 最好的设计方案：
@@ -26,19 +37,14 @@ type UserServiceImpl struct {
 	jwtUtil     *util.JWTUtil
 }
 
-// 默认JWT配置（可在配置文件中配置）
-const (
-	DefaultJWTSecretKey   = "forge-secret-key-change-in-production"
-	DefaultJWTExpireHours = 24 * 7 // 过期时间7天
-)
-
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
-	cozeService adapter.CozeService) *UserServiceImpl {
+	cozeService adapter.CozeService,
+	jwtUtil *util.JWTUtil) *UserServiceImpl {
 	return &UserServiceImpl{
 		userRepo:    userRepo,
 		cozeService: cozeService,
-		jwtUtil:     util.NewJWTUtil(DefaultJWTSecretKey, DefaultJWTExpireHours),
+		jwtUtil:     jwtUtil,
 	}
 }
 
@@ -47,7 +53,7 @@ func (u *UserServiceImpl) Login(ctx context.Context, account, accountType, passw
 	// 参数校验
 	if account == "" || accountType == "" || password == "" {
 		zlog.CtxErrorf(ctx, "invalid params for login: account, accountType or password is empty")
-		return nil, "", fmt.Errorf("invalid params for login")
+		return nil, "", ErrInvalidParams
 	}
 
 	// 根据账号类型查找用户
@@ -56,7 +62,7 @@ func (u *UserServiceImpl) Login(ctx context.Context, account, accountType, passw
 		// 如果用户不存在，返回错误
 		if errors.Is(err, ErrUserNotFound) {
 			zlog.CtxErrorf(ctx, "user not found: %s", account)
-			return nil, "", fmt.Errorf("account or password incorrect")
+			return nil, "", ErrCredentialsIncorrect
 		}
 		// 其他错误（数据库错误等）
 		return nil, "", err
@@ -66,21 +72,21 @@ func (u *UserServiceImpl) Login(ctx context.Context, account, accountType, passw
 	match, err := util.ComparePassword(user.Password, password)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "compare password failed: %v", err)
-		return nil, "", fmt.Errorf("internal error: failed to verify password")
+		return nil, "", ErrInternalError
 	}
 	if !match {
 		zlog.CtxErrorf(ctx, "password incorrect for user: %s", user.UserID)
-		return nil, "", fmt.Errorf("account or password incorrect")
+		return nil, "", ErrCredentialsIncorrect
 	}
 
 	// 生成JWT token
 	token, err := u.jwtUtil.GenerateToken(user.UserID)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "generate token failed: %v", err)
-		return nil, "", fmt.Errorf("failed to generate token")
+		return nil, "", ErrInternalError
 	}
 
-	// 方法一  通过注入的 cozeService 接口调用 哇哦
+	// 方法一  通过注入的 cozeService 接口调用
 	result, err := u.cozeService.RunWorkflow(ctx, &adapter.RunWorkflowReq{})
 	if err != nil {
 		zlog.CtxErrorf(ctx, "run workflow failed: %v", err)
@@ -114,7 +120,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	// 基本校验
 	if req.Account == "" || req.AccountType == "" || req.Password == "" {
 		zlog.CtxErrorf(ctx, "invalid params for register")
-		return nil, fmt.Errorf("invalid params for register")
+		return nil, ErrInvalidParams
 	}
 
 	// 检查账号是否已存在
@@ -136,25 +142,31 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 			accountField = "email"
 		}
 		zlog.CtxErrorf(ctx, "%s already registered: %s", accountField, req.Account)
-		return nil, fmt.Errorf("%s already registered", accountField)
+		return nil, ErrUserAlreadyExists
 	}
 
 	// 校验验证码 code（短信/邮箱） 占位
 
 	//------------------------------------------------
 
+	// 验证密码强度  按照常规要求设置
+	if err := util.ValidatePasswordStrength(req.Password); err != nil {
+		zlog.CtxErrorf(ctx, "password strength validation failed: %v", err)
+		return nil, err
+	}
+
 	// 生成用户ID  snowflake雪花id
 	userID, err := util.GenerateStringID()
 	if err != nil {
 		zlog.CtxErrorf(ctx, "generate user id failed: %v", err)
-		return nil, fmt.Errorf("generate user id failed: %w", err)
+		return nil, ErrInternalError
 	}
 	//
 
 	// 加密密码
 	hash, err := util.HashPassword(req.Password)
 	if err != nil {
-		return nil, fmt.Errorf("failed to hash password: %w", err)
+		return nil, ErrInternalError
 	}
 
 	// 组装实体 仓储接口写入数据库持久化
@@ -197,19 +209,18 @@ func (u *UserServiceImpl) findUserByAccount(ctx context.Context, account, accoun
 		accountField = "email"
 	default:
 		zlog.CtxErrorf(ctx, "unsupported accountType: %s", accountType)
-		return nil, fmt.Errorf("unsupported accountType: %s", accountType)
+		return nil, ErrUnsupportedAccountType
 	}
 
 	user, err := u.userRepo.GetUser(ctx, query)
 	if err != nil {
 		// 数据库查询错误，返回内部错误
 		zlog.CtxErrorf(ctx, "failed to get user by %s: %v", accountField, err)
-		return nil, fmt.Errorf("internal error: failed to query user")
+		return nil, ErrInternalError
 	}
 
 	if user == nil {
 		// 用户不存在
-		zlog.CtxErrorf(ctx, "user not found by %s: %s", accountField, account)
 		return nil, ErrUserNotFound
 	}
 
@@ -221,17 +232,17 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 	// 参数校验
 	if req == nil {
 		zlog.CtxErrorf(ctx, "reset password request is nil")
-		return fmt.Errorf("invalid params for reset password")
+		return ErrInvalidParams
 	}
 	if req.Account == "" || req.AccountType == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
 		zlog.CtxErrorf(ctx, "invalid params for reset password: missing required fields")
-		return fmt.Errorf("invalid params for reset password: missing required fields")
+		return ErrInvalidParams
 	}
 
 	// 校验两次密码一致性
 	if req.NewPassword != req.ConfirmPassword {
 		zlog.CtxErrorf(ctx, "password and confirm password do not match")
-		return fmt.Errorf("password and confirm password do not match")
+		return ErrPasswordMismatch
 	}
 
 	// 根据账号类型查找用户
@@ -244,11 +255,17 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 
 	// 验证码校验逻辑应该在这里实现
 
+	// 验证新密码强度
+	if err := util.ValidatePasswordStrength(req.NewPassword); err != nil {
+		zlog.CtxErrorf(ctx, "password strength validation failed: %v", err)
+		return err
+	}
+
 	// 加密新密码
 	hash, err := util.HashPassword(req.NewPassword)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "hash password failed: %v", err)
-		return fmt.Errorf("failed to hash password: %w", err)
+		return ErrInternalError
 	}
 
 	// 更新用户密码
@@ -259,7 +276,7 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 	}
 	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
 		zlog.CtxErrorf(ctx, "update password failed: %v", err)
-		return fmt.Errorf("failed to update password")
+		return ErrInternalError
 	}
 
 	zlog.CtxInfof(ctx, "reset password successfully for user: %s", user.UserID)

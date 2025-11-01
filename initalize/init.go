@@ -28,13 +28,18 @@ func Init() {
 	coze.InitCozeService()
 	storage.InitUserStorage()
 
-	// snowflake        // 节点id作为配置项，避免所有实例都将使用相同的节点 ID
-	if err := util.InitSnowflake(1); err != nil {
+	// snowflake - 从配置文件读取节点ID
+	snowflakeConfig := configs.Config().GetSnowflakeConfig()
+	if err := util.InitSnowflake(snowflakeConfig.NodeID); err != nil {
 		// 初始化失败，直接 panic 提示原因
 		panic(fmt.Sprintf("init snowflake failed: %v", err))
 	}
 
-	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService())
+	// 从配置文件读取JWT配置并创建JWTUtil
+	jwtConfig := configs.Config().GetJWTConfig()
+	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
+
+	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	handler.MustInitHandler(us)
 
 }

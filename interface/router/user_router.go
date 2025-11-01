@@ -3,7 +3,6 @@ package router
 import (
 	"errors"
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 
@@ -14,58 +13,58 @@ import (
 	"forge/pkg/log/zlog"
 	"forge/pkg/loop"
 	"forge/pkg/response"
+	"forge/util"
 )
 
 // 这里就是gin框架的相关接触代码
 // 因为解耦的缘故，框架层面的更换不会对内部代码造成任何影响
 // router 与hander 应该是一个一对一的关系，有可能会有多对一的关系
 
-// mapServiceErrorToMsgCode 根据服务层返回的错误映射到相应的错误码
+// mapServiceErrorToMsgCode 根据应用层返回的错误映射到相应的错误码
 func mapServiceErrorToMsgCode(err error) response.MsgCode {
 	if err == nil {
 		return response.SUCCESS
 	}
 
-	// 检查是否是用户不存在错误
+	// 对应 code_der.go
+	// 使用 errors.Is 进行哨兵错误匹配，更加健壮  避免通过字符串匹配来判断
 	if errors.Is(err, userservice.ErrUserNotFound) {
 		return response.USER_ACCOUNT_NOT_EXIST
 	}
 
-	errMsg := err.Error()
-
-	// 账号已存在
-	if strings.Contains(errMsg, "already registered") {
+	if errors.Is(err, userservice.ErrUserAlreadyExists) {
 		return response.USER_ACCOUNT_ALREADY_EXIST
 	}
 
-	// 参数错误
-	if strings.Contains(errMsg, "invalid params") || strings.Contains(errMsg, "missing required fields") {
+	if errors.Is(err, userservice.ErrInvalidParams) {
 		return response.PARAM_NOT_VALID
 	}
 
-	// 密码不一致
-	if strings.Contains(errMsg, "password and confirm password do not match") {
+	if errors.Is(err, userservice.ErrPasswordMismatch) {
 		return response.USER_PASSWORD_DIFFERENT
 	}
 
-	// 账号或密码错误（登录失败）
-	if strings.Contains(errMsg, "account or password incorrect") {
+	if errors.Is(err, userservice.ErrCredentialsIncorrect) {
 		return response.USER_CREDENTIALS_ERROR
 	}
 
-	// 账号格式无效
-	if strings.Contains(errMsg, "invalid account format") {
+	if errors.Is(err, userservice.ErrUnsupportedAccountType) {
 		return response.PARAM_NOT_VALID
 	}
 
-	// 账号类型不支持
-	if strings.Contains(errMsg, "unsupported accountType") {
-		return response.PARAM_NOT_VALID
-	}
-
-	// 内部错误
-	if strings.Contains(errMsg, "internal error") {
+	if errors.Is(err, userservice.ErrInternalError) {
 		return response.INTERNAL_ERROR
+	}
+
+	// 密码强度校验错误
+	if errors.Is(err, util.ErrPasswordTooShort) {
+		return response.PARAM_NOT_VALID
+	}
+	if errors.Is(err, util.ErrPasswordTooWeak) {
+		return response.PARAM_NOT_VALID
+	}
+	if errors.Is(err, util.ErrPasswordTooLong) {
+		return response.PARAM_NOT_VALID
 	}
 
 	// 默认返回通用错误

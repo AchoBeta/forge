@@ -4,8 +4,9 @@ import (
 	"flag"
 	"forge/constant"
 	"forge/pkg/log/zlog"
-	"github.com/spf13/viper"
 	"time"
+
+	"github.com/spf13/viper"
 )
 
 type IConfig interface {
@@ -13,6 +14,8 @@ type IConfig interface {
 	GetDBConfig() DBConfig
 	GetAppConfig() ApplicationConfig
 	GetLoggerConfig() LoggerConfig
+	GetJWTConfig() JWTConfig
+	GetSnowflakeConfig() SnowflakeConfig
 }
 
 var (
@@ -42,6 +45,16 @@ func (c *config) GetAppConfig() ApplicationConfig {
 
 func (c *config) GetLoggerConfig() LoggerConfig {
 	return c.LogConfig
+}
+
+// jwt配置读取
+func (c *config) GetJWTConfig() JWTConfig {
+	return c.JWTConfig
+}
+
+// snowflake配置读取
+func (c *config) GetSnowflakeConfig() SnowflakeConfig {
+	return c.SnowflakeConfig
 }
 
 func mustInit(path string) *config {
@@ -84,10 +97,12 @@ func mustInit(path string) *config {
 }
 
 type config struct {
-	AppConfig   ApplicationConfig `mapstructure:"app"`
-	LogConfig   LoggerConfig      `mapstructure:"log"`
-	DBConfig    DBConfig          `mapstructure:"database"`
-	RedisConfig RedisConfig       `mapstructure:"redis"`
+	AppConfig       ApplicationConfig `mapstructure:"app"`
+	LogConfig       LoggerConfig      `mapstructure:"log"`
+	DBConfig        DBConfig          `mapstructure:"database"`
+	RedisConfig     RedisConfig       `mapstructure:"redis"`
+	JWTConfig       JWTConfig         `mapstructure:"jwt"`
+	SnowflakeConfig SnowflakeConfig   `mapstructure:"snowflake"`
 }
 
 type ApplicationConfig struct {
@@ -119,4 +134,13 @@ type RedisConfig struct {
 type KafkaConfig struct {
 	host string `mapstructure:"host"`
 	port int    `mapstructure:"port"`
+}
+
+type JWTConfig struct {
+	SecretKey   string `mapstructure:"secret_key"`
+	ExpireHours int    `mapstructure:"expire_hours"`
+}
+
+type SnowflakeConfig struct {
+	NodeID int64 `mapstructure:"node_id"`
 }

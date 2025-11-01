@@ -14,7 +14,7 @@ import (
 
 // 用户服务，围绕用户实体的存储展开
 type UserRepo interface {
-	// 只读操作
+	// 写操作
 	// 创建用户
 	CreateUser(ctx context.Context, user *entity.User) error
 
