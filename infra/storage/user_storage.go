@@ -95,28 +95,43 @@ func (u *userPersistence) UpdateUser(ctx context.Context, updateInfo *repo.UserU
 // GetUser 用户查询接口，根据查询条件获取用户
 func (u *userPersistence) GetUser(ctx context.Context, query repo.UserQuery) (*entity.User, error) {
 	var userPO po.UserPO
-	var err error
 
 	// 根据查询条件构建查询
 	db := u.db.WithContext(ctx)
 
-	switch {
-	case query.UserID != "":
-		err = db.Where("user_id = ?", query.UserID).First(&userPO).Error
-	case query.UserName != "":
-		err = db.Where("username = ?", query.UserName).First(&userPO).Error
-	case query.Phone != "":
-		err = db.Where("phone = ?", query.Phone).First(&userPO).Error
-	case query.Email != "":
-		err = db.Where("email = ?", query.Email).First(&userPO).Error
-		/// case query.Platform != "" && query.ThirdID != "":
-		// 第三方登录查询逻辑
-		return nil, nil
-	default:
+	// 唯一标识直接查
+	if query.UserID != "" {
+		if err := db.Where("user_id = ? AND is_deleted = 0", query.UserID).First(&userPO).Error; err != nil {
+			if err == gorm.ErrRecordNotFound {
+				return nil, nil
+			}
+			return nil, err
+		}
+		return CastUserPO2DO(&userPO), nil
+	}
+
+	var hasCond bool
+	if query.UserName != "" {
+		db = db.Where("username = ?", query.UserName)
+		hasCond = true
+	}
+	if query.Phone != "" {
+		db = db.Where("phone = ?", query.Phone)
+		hasCond = true
+	}
+	if query.Email != "" {
+		db = db.Where("email = ?", query.Email)
+		hasCond = true
+	}
+
+	if !hasCond {
 		return nil, fmt.Errorf("invalid user query: no query field provided")
 	}
 
-	if err != nil {
+	// 未删除条件
+	db = db.Where("is_deleted = 0")
+
+	if err := db.First(&userPO).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
 			return nil, nil
 		}

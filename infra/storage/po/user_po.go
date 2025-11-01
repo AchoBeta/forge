@@ -23,7 +23,7 @@ type UserPO struct {
 
 	CreatedAt   *time.Time `gorm:"column:created_at" json:"create_at"`
 	UpdatedAt   *time.Time `gorm:"column:updated_at" json:"updated_at"`
-	IsDeleted   int8       `gorm:"column:is_deleted" json:"is_deleted"`
+	IsDeleted   int8       `gorm:"column:is_deleted" json:"is_deleted"` // 已删除：1
 	LastLoginAt *time.Time `gorm:"column:last_login_at" json:"last_login_at"`
 	//Extra     string     `gorm:"column:extra" json:"extra,omitempty"`
 }
