@@ -72,12 +72,14 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	// 检查账号是否已存在
 	switch req.AccountType {
 	case "phone":
-		if exist, _ := u.userRepo.GetByPhone(ctx, req.Account); exist != nil {
+		query := repo.NewUserQueryByPhone(req.Account)
+		if exist, _ := u.userRepo.GetUser(ctx, query); exist != nil {
 			zlog.CtxErrorf(ctx, "phone already registered")
 			return nil, fmt.Errorf("phone already registered")
 		}
 	case "email":
-		if exist, _ := u.userRepo.GetByEmail(ctx, req.Account); exist != nil {
+		query := repo.NewUserQueryByEmail(req.Account)
+		if exist, _ := u.userRepo.GetUser(ctx, query); exist != nil {
 			zlog.CtxErrorf(ctx, "email already registered")
 			return nil, fmt.Errorf("email already registered")
 		}
@@ -91,16 +93,10 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	//------------------------------------------------
 
 	// 生成用户ID  snowflake雪花id
-	var userID string
-	if util.Snowflake != nil {
-		id, err := util.Snowflake.GenerateStringID()
-		if err != nil {
-			return nil, err
-		}
-		userID = id
-	} else {
-		zlog.CtxErrorf(ctx, "snowflake not initialized")
-		return nil, fmt.Errorf("snowflake not initialized")
+	userID, err := util.GenerateStringID()
+	if err != nil {
+		zlog.CtxErrorf(ctx, "generate user id failed: %v", err)
+		return nil, fmt.Errorf("generate user id failed: %w", err)
 	}
 	//
 
@@ -135,16 +131,74 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 // ResetPassword 重置密码
 func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPasswordParams) error {
 	// 参数校验
+	if req == nil {
+		zlog.CtxErrorf(ctx, "reset password request is nil")
+		return fmt.Errorf("invalid params for reset password")
+	}
+	if req.Account == "" || req.AccountType == "" || req.NewPassword == "" || req.ConfirmPassword == "" {
+		zlog.CtxErrorf(ctx, "invalid params for reset password: missing required fields")
+		return fmt.Errorf("invalid params for reset password: missing required fields")
+	}
 
-	// 验证两次密码一致性
+	// 校验两次密码一致性
+	if req.NewPassword != req.ConfirmPassword {
+		zlog.CtxErrorf(ctx, "password and confirm password do not match")
+		return fmt.Errorf("password and confirm password do not match")
+	}
 
-	// 查询用户
+	// 根据账号类型查找用户
+	var user *entity.User
+	var err error
+	switch req.AccountType {
+	case "phone":
+		query := repo.NewUserQueryByPhone(req.Account)
+		user, err = u.userRepo.GetUser(ctx, query)
+		if err != nil {
+			zlog.CtxErrorf(ctx, "get user by phone failed: %v", err)
+			return fmt.Errorf("user not found")
+		}
+		if user == nil {
+			zlog.CtxErrorf(ctx, "user not found by phone: %s", req.Account)
+			return fmt.Errorf("user not found")
+		}
+	case "email":
+		query := repo.NewUserQueryByEmail(req.Account)
+		user, err = u.userRepo.GetUser(ctx, query)
+		if err != nil {
+			zlog.CtxErrorf(ctx, "get user by email failed: %v", err)
+			return fmt.Errorf("user not found")
+		}
+		if user == nil {
+			zlog.CtxErrorf(ctx, "user not found by email: %s", req.Account)
+			return fmt.Errorf("user not found")
+		}
+	default:
+		zlog.CtxErrorf(ctx, "unsupported accountType: %s", req.AccountType)
+		return fmt.Errorf("unsupported accountType: %s", req.AccountType)
+	}
 
-	// 校验验证码
+	// 4. 校验验证码 code（短信/邮箱），此处预留
+
+	// 验证码校验逻辑应该在这里实现
 
 	// 加密新密码
+	hash, err := util.HashPassword(req.NewPassword)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "hash password failed: %v", err)
+		return fmt.Errorf("failed to hash password")
+	}
 
 	// 更新用户密码
+	password := hash
+	updateInfo := &repo.UserUpdateInfo{
+		UserID:   user.UserID,
+		Password: &password,
+	}
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update password failed: %v", err)
+		return fmt.Errorf("failed to update password")
+	}
 
+	zlog.CtxInfof(ctx, "reset password successfully for user: %s", user.UserID)
 	return nil
 }

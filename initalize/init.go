@@ -29,7 +29,7 @@ func Init() {
 	storage.InitUserStorage()
 
 	// snowflake
-	_ = util.InitSnowflake(1, 1)
+	_ = util.InitSnowflake(1)
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService())
 	handler.MustInitHandler(us)

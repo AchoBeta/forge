@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"forge/biz/entity"
+	"time"
 )
 
 // 得益于repo的概念，service的代码只需要调用该方法即可，
@@ -17,24 +18,15 @@ type UserRepo interface {
 	// 创建用户
 	CreateUser(ctx context.Context, user *entity.User) error
 
-	// 更新用户
+	//更新用户  统一更新接口 包括密码
 	UpdateUser(ctx context.Context, updateInfo *UserUpdateInfo) error
 
-	// 更改密码
-	UpdatePassWord(ctx context.Context, userID string, NewPassword string) error
-
 	// 只读操作
-	// 根据id查询
-	GetByUserID(ctx context.Context, userID string) (*entity.User, error)
-	// 根据用户名查询
-	GetByName(ctx context.Context, name string) (*entity.User, error)
-	// 根据手机号查询
-	GetByPhone(ctx context.Context, phone string) (*entity.User, error)
-	// 根据邮箱查询
-	GetByEmail(ctx context.Context, email string) (*entity.User, error)
+	// GetUser 根据查询条件获取用户，支持多种查询方式
+	GetUser(ctx context.Context, query UserQuery) (*entity.User, error)
 
 	/*  根据第三方登录方式查询 后续可能有更多第三方登录方式
-	FindByThirdParty(ctx context.Context, platform string, id string) (*entity.User, error)
+	GetByThirdParty(ctx context.Context, platform string, id string) (*entity.User, error)
 	*/
 
 	/*
@@ -58,6 +50,63 @@ type CounterRepo interface {
 	Count(ctx context.Context, key string) (int, error)
 }
 
+// UserUpdateInfo 用户更新信息
 type UserUpdateInfo struct {
-	//后续可能能换头像，名称等
+	UserID string // 用户ID
+
+	// 基础信息
+	Name   *string // 用户名
+	Avatar *string // 头像URL
+
+	// 联系方式
+	Phone *string // 手机号
+	Email *string // 邮箱
+
+	Password *string // 密码
+
+	// 状态信息
+	Status        *int  // 用户状态 1:正常 0:禁用
+	PhoneVerified *bool // 手机号是否已验证
+	EmailVerified *bool // 邮箱是否已验证
+
+	// 时间信息
+	LastLoginAt *time.Time // 最后登录时间
+
+	// 第三方登录（暂不开放，后续扩展）
+	/*
+	   WechatOpenID  *string
+	   WechatUnionID *string
+	   GithubID      *string
+	   GithubLogin   *string
+	*/
+}
+
+// UserQuery 用户查询条件
+type UserQuery struct {
+	UserID string // 根据用户ID查询
+	Name   string // 根据用户名查询
+	Phone  string // 根据手机号查询
+	Email  string // 根据邮箱查询
+	// Platform string // 第三方平台
+	// ThirdID  string // 第三方ID
+}
+
+// NewUserQueryByID 创建根据用户ID查询的条件
+func NewUserQueryByID(userID string) UserQuery {
+	return UserQuery{UserID: userID}
+}
+
+// NewUserQueryByName 创建根据用户名查询的条件
+func NewUserQueryByName(name string) UserQuery {
+	return UserQuery{Name: name}
+}
+
+// NewUserQueryByPhone 创建根据手机号查询的条件
+func NewUserQueryByPhone(phone string) UserQuery {
+	return UserQuery{Phone: phone}
+}
+
+// NewUserQueryByEmail 创建根据邮箱查询的条件
+func NewUserQueryByEmail(email string) UserQuery {
+	return UserQuery{Email: email}
 }

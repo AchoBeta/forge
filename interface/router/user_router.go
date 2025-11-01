@@ -70,12 +70,25 @@ func Register() gin.HandlerFunc {
 
 // ResetPassword
 //
-//	@Description:[POST] /api/biz/v1/user/reset-password
+//	@Description:[POST] /api/biz/v1/user/reset_password
 //	@return gin.HandlerFunc
 func ResetPassword() gin.HandlerFunc {
-	return func(ctx *gin.Context) {
-		// 将前端json映射到PesetPasswordReq
+	return func(gCtx *gin.Context) {
+		req := &def.ResetPasswordReq{}
+		// 统一从 gin 上下文取出 request 的 context
+		ctx := gCtx.Request.Context()
+		if err := gCtx.ShouldBindJSON(req); err != nil {
+			r := response.NewResponse(gCtx)
+			r.Error(response.USER_NOT_LOGIN)
+			return
+		}
 
-		//
+		rsp, err := handler.GetHandler().ResetPassword(ctx, req)
+
+		if err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.USER_NOT_LOGIN.Code, Message: response.USER_NOT_LOGIN.Msg, Data: struct{}{}})
+			return
+		}
+		gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.SUCCESS_CODE, Message: response.SUCCESS_MSG, Data: rsp})
 	}
 }
