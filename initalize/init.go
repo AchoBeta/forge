@@ -29,7 +29,10 @@ func Init() {
 	storage.InitUserStorage()
 
 	// snowflake        // 节点id作为配置项，避免所有实例都将使用相同的节点 ID
-	_ = util.InitSnowflake(1)
+	if err := util.InitSnowflake(1); err != nil {
+		// 初始化失败，直接 panic 提示原因
+		panic(fmt.Sprintf("init snowflake failed: %v", err))
+	}
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService())
 	handler.MustInitHandler(us)

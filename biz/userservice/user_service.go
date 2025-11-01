@@ -154,7 +154,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	// 加密密码
 	hash, err := util.HashPassword(req.Password)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	// 组装实体 仓储接口写入数据库持久化
@@ -248,7 +248,7 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 	hash, err := util.HashPassword(req.NewPassword)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "hash password failed: %v", err)
-		return fmt.Errorf("failed to hash password")
+		return fmt.Errorf("failed to hash password: %w", err)
 	}
 
 	// 更新用户密码

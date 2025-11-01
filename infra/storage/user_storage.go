@@ -50,7 +50,7 @@ func (u *userPersistence) UpdateUser(ctx context.Context, updateInfo *repo.UserU
 
 	// 基础信息
 	if updateInfo.UserName != nil {
-		updates["name"] = *updateInfo.UserName
+		updates["username"] = *updateInfo.UserName
 	}
 	if updateInfo.Avatar != nil {
 		updates["avatar"] = *updateInfo.Avatar
