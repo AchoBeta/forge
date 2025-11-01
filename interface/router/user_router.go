@@ -135,6 +135,7 @@ func Register() gin.HandlerFunc {
 		}
 
 		rsp, err := handler.GetHandler().Register(ctx, req)
+		r := response.NewResponse(gCtx)
 
 		if err != nil {
 			// 根据 err 的类型返回更具体的错误码
@@ -146,7 +147,7 @@ func Register() gin.HandlerFunc {
 			})
 			return
 		}
-		gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.SUCCESS_CODE, Message: response.SUCCESS_MSG, Data: rsp})
+		r.Success(rsp)
 	}
 }
 
@@ -169,6 +170,7 @@ func ResetPassword() gin.HandlerFunc {
 		}
 
 		rsp, err := handler.GetHandler().ResetPassword(ctx, req)
+		r := response.NewResponse(gCtx)
 
 		if err != nil {
 			// 根据服务层返回的错误类型，返回给客户端更精确的错误信息
@@ -180,6 +182,6 @@ func ResetPassword() gin.HandlerFunc {
 			})
 			return
 		}
-		gCtx.JSON(http.StatusOK, response.JsonMsgResult{Code: response.SUCCESS_CODE, Message: response.SUCCESS_MSG, Data: rsp})
+		r.Success(rsp)
 	}
 }
