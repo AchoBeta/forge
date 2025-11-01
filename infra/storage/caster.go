@@ -60,13 +60,16 @@ func CastUserPO2DO(userPO *po.UserPO) *entity.User {
 }
 
 // CastMindMapDO2PO 领域对象转持久化对象
-func CastMindMapDO2PO(mindmap *entity.MindMap) *po.MindMapPO {
+func CastMindMapDO2PO(mindmap *entity.MindMap) (*po.MindMapPO, error) {
 	if mindmap == nil {
-		return nil
+		return nil, nil
 	}
 
 	// 序列化Data为JSON字符串
-	dataBytes, _ := json.Marshal(mindmap.Data)
+	dataBytes, err := json.Marshal(mindmap.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal mindmap data: %w", err)
+	}
 
 	mindmapPO := &po.MindMapPO{
 		MapID:  mindmap.MapID,
@@ -85,7 +88,7 @@ func CastMindMapDO2PO(mindmap *entity.MindMap) *po.MindMapPO {
 		mindmapPO.UpdatedAt = &mindmap.UpdatedAt
 	}
 
-	return mindmapPO
+	return mindmapPO, nil
 }
 
 // CastMindMapPO2DO 持久化对象转领域对象

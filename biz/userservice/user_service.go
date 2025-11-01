@@ -307,7 +307,7 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 	}
 
 	// 检查用户状态（业务逻辑应该在service层）
-	if user.Status != 1 {
+	if user.Status != entity.UserStatusActive {
 		zlog.CtxWarnf(ctx, "user is disabled: %s", userID)
 		return nil, ErrPermissionDenied
 	}

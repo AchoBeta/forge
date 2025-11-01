@@ -39,16 +39,6 @@ func (s *MindMapServiceImpl) CreateMindMap(ctx context.Context, req *types.Creat
 		return nil, ErrPermissionDenied
 	}
 
-	// 参数校验
-	if req.Title == "" {
-		zlog.CtxErrorf(ctx, "title is required")
-		return nil, ErrInvalidParams
-	}
-	if req.Layout == "" {
-		zlog.CtxErrorf(ctx, "layout is required")
-		return nil, ErrInvalidParams
-	}
-
 	// 生成思维导图ID
 	mapID, err := util.GenerateStringID()
 	if err != nil {
@@ -161,13 +151,34 @@ func (s *MindMapServiceImpl) UpdateMindMap(ctx context.Context, mapID string, re
 		return ErrInvalidParams
 	}
 
-	// 首先验证思维导图存在且属于当前用户
+	// 先获取现有思维导图（用于校验和构建临时实体）
 	existingMindMap, err := s.GetMindMap(ctx, mapID)
 	if err != nil {
 		return err // GetMindMap已经包含权限验证
 	}
 	if existingMindMap == nil {
 		return ErrMindMapNotFound
+	}
+
+	// 将更新应用到临时实体以进行校验（复用实体层的校验逻辑）
+	tempMindMap := *existingMindMap
+	if req.Title != nil {
+		tempMindMap.Title = *req.Title
+	}
+	if req.Desc != nil {
+		tempMindMap.Desc = *req.Desc
+	}
+	if req.Layout != nil {
+		tempMindMap.Layout = *req.Layout
+	}
+	if req.Data != nil {
+		tempMindMap.Data = *req.Data
+	}
+
+	// 使用实体层的校验方法统一校验
+	if err := tempMindMap.Validate(); err != nil {
+		zlog.CtxErrorf(ctx, "mindmap validation failed after update: %v", err)
+		return err
 	}
 
 	// 构建更新信息
@@ -180,28 +191,11 @@ func (s *MindMapServiceImpl) UpdateMindMap(ctx context.Context, mapID string, re
 		Data:   req.Data,
 	}
 
-	// 如果有标题更新，进行校验
-	if req.Title != nil {
-		if *req.Title == "" {
-			return ErrInvalidParams
-		}
-		if len(*req.Title) > 100 {
-			return entity.ErrTitleTooLong
-		}
-	}
-
-	// 如果有描述更新，进行校验
-	if req.Desc != nil && len(*req.Desc) > 500 {
-		return entity.ErrDescTooLong
-	}
-
-	// 如果有布局更新，进行校验
-	if req.Layout != nil && *req.Layout == "" {
-		return entity.ErrInvalidLayout
-	}
-
-	// 执行更新
+	// 执行更新（repo层已包含权限校验）
 	if err := s.mindMapRepo.UpdateMindMap(ctx, updateInfo); err != nil {
+		if errors.Is(err, repo.ErrMindMapNotFound) {
+			return ErrMindMapNotFound
+		}
 		zlog.CtxErrorf(ctx, "failed to update mindmap: %v", err)
 		return ErrInternalError
 	}
@@ -225,17 +219,11 @@ func (s *MindMapServiceImpl) DeleteMindMap(ctx context.Context, mapID string) er
 		return ErrInvalidParams
 	}
 
-	// 首先验证思维导图存在且属于当前用户
-	existingMindMap, err := s.GetMindMap(ctx, mapID)
-	if err != nil {
-		return err // GetMindMap已经包含权限验证
-	}
-	if existingMindMap == nil {
-		return ErrMindMapNotFound
-	}
-
-	// 执行删除（软删除）
-	if err := s.mindMapRepo.DeleteMindMap(ctx, mapID); err != nil {
+	// 执行删除（软删除，repo层已包含权限校验）
+	if err := s.mindMapRepo.DeleteMindMap(ctx, mapID, user.UserID); err != nil {
+		if errors.Is(err, repo.ErrMindMapNotFound) {
+			return ErrMindMapNotFound
+		}
 		zlog.CtxErrorf(ctx, "failed to delete mindmap: %v", err)
 		return ErrInternalError
 	}

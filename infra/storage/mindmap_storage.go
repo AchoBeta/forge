@@ -9,6 +9,7 @@ import (
 	"forge/biz/repo"
 	"forge/infra/database"
 	"forge/infra/storage/po"
+	"forge/pkg/log/zlog"
 
 	"gorm.io/gorm"
 )
@@ -38,8 +39,11 @@ func GetMindMapPersistence() repo.IMindMapRepo {
 
 // CreateMindMap 创建思维导图
 func (m *mindMapPersistence) CreateMindMap(ctx context.Context, mindmap *entity.MindMap) error {
-	mindmapPO := CastMindMapDO2PO(mindmap)
-	if err := m.db.WithContext(ctx).Create(&mindmapPO).Error; err != nil {
+	mindmapPO, err := CastMindMapDO2PO(mindmap)
+	if err != nil {
+		return fmt.Errorf("convert mindmap to PO failed: %w", err)
+	}
+	if err := m.db.WithContext(ctx).Create(mindmapPO).Error; err != nil {
 		return fmt.Errorf("create mindmap failed: %w", err)
 	}
 	return nil
@@ -122,6 +126,7 @@ func (m *mindMapPersistence) ListMindMaps(ctx context.Context, query repo.MindMa
 	for _, po := range mindmapPOs {
 		mindmap, err := CastMindMapPO2DO(&po)
 		if err != nil {
+			zlog.CtxErrorf(ctx, "failed to cast mindmap PO to DO for mapID %s: %v", po.MapID, err)
 			continue // 跳过转换失败的记录
 		}
 		mindmaps = append(mindmaps, mindmap)
@@ -169,17 +174,21 @@ func (m *mindMapPersistence) UpdateMindMap(ctx context.Context, updateInfo *repo
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("mindmap not found or no permission")
+		return repo.ErrMindMapNotFound
 	}
 
 	return nil
 }
 
 // DeleteMindMap 删除思维导图（软删除）
-func (m *mindMapPersistence) DeleteMindMap(ctx context.Context, mapID string) error {
+func (m *mindMapPersistence) DeleteMindMap(ctx context.Context, mapID string, userID string) error {
+	if mapID == "" || userID == "" {
+		return fmt.Errorf("MapID and UserID are required for deletion")
+	}
+
 	result := m.db.WithContext(ctx).
 		Model(&po.MindMapPO{}).
-		Where("map_id = ? AND is_deleted = 0", mapID).
+		Where("map_id = ? AND user_id = ? AND is_deleted = 0", mapID, userID).
 		Update("is_deleted", 1)
 
 	if result.Error != nil {
@@ -187,7 +196,7 @@ func (m *mindMapPersistence) DeleteMindMap(ctx context.Context, mapID string) er
 	}
 
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("mindmap not found")
+		return repo.ErrMindMapNotFound
 	}
 
 	return nil

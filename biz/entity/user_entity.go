@@ -34,6 +34,12 @@ type User struct {
 	// ... ex
 }
 
+// 用户状态常量
+const (
+	UserStatusActive   = 1 // 正常
+	UserStatusDisabled = 0 // 禁用
+)
+
 type Dog struct {
 	DogID   string
 	DogName string

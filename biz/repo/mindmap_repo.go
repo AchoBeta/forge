@@ -2,7 +2,13 @@ package repo
 
 import (
 	"context"
+	"errors"
 	"forge/biz/entity"
+)
+
+// 哨兵错误定义
+var (
+	ErrMindMapNotFound = errors.New("mindmap not found or no permission")
 )
 
 // IMindMapRepo 思维导图仓储接口
@@ -11,7 +17,7 @@ type IMindMapRepo interface {
 	GetMindMap(ctx context.Context, query MindMapQuery) (*entity.MindMap, error)
 	ListMindMaps(ctx context.Context, query MindMapQuery) ([]*entity.MindMap, int64, error)
 	UpdateMindMap(ctx context.Context, updateInfo *MindMapUpdateInfo) error
-	DeleteMindMap(ctx context.Context, mapID string) error
+	DeleteMindMap(ctx context.Context, mapID string, userID string) error
 }
 
 // MindMapQuery 查询条件
@@ -26,12 +32,12 @@ type MindMapQuery struct {
 
 // MindMapUpdateInfo 更新信息（部分更新）
 type MindMapUpdateInfo struct {
-	MapID  string               // 思维导图ID（必填）
-	UserID string               // 用户ID（用于权限验证）
-	Title  *string              // 标题
-	Desc   *string              // 描述
-	Layout *string              // 布局
-	Data   *entity.MindMapData  // 数据（全量更新）
+	MapID  string              // 思维导图ID（必填）
+	UserID string              // 用户ID（用于权限验证）
+	Title  *string             // 标题
+	Desc   *string             // 描述
+	Layout *string             // 布局
+	Data   *entity.MindMapData // 数据（全量更新）
 }
 
 // 查询构建函数
