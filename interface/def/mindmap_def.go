@@ -36,9 +36,15 @@ type MindMapDTO struct {
 }
 
 // 节点数据DTO
+type NodeData struct {
+	Text string `json:"text"`
+	// 可扩展其他节点属性，如颜色、图标等
+}
+
+// 思维导图数据DTO - 递归树结构
 type MindMapData struct {
-	Text     string        `json:"text"`
-	Children []MindMapData `json:"children"`
+	Data     NodeData      `json:"data"`     // 节点数据
+	Children []MindMapData `json:"children"` // 子节点（递归结构）
 }
 
 // 响应DTO

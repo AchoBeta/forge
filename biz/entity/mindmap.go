@@ -32,8 +32,8 @@ type NodeData struct {
 
 // MindMapData 思维导图数据值对象 - 递归树结构
 type MindMapData struct {
-	Text     string
-	Children []MindMapData
+	Data     NodeData      // 节点数据
+	Children []MindMapData // 子节点（递归结构）
 }
 
 // 上下文助手

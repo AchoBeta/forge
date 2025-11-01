@@ -61,16 +61,11 @@ func (m *mindMapPersistence) GetMindMap(ctx context.Context, query repo.MindMapQ
 	}
 	db = db.Where("user_id = ?", query.UserID)
 
-	// 可选条件
-	if query.MapID != "" {
-		db = db.Where("map_id = ?", query.MapID)
+	// 必须有MapID（GetMindMap用于获取单个实体）
+	if query.MapID == "" {
+		return nil, fmt.Errorf("MapID is required")
 	}
-	if query.Title != "" {
-		db = db.Where("title LIKE ?", "%"+query.Title+"%")
-	}
-	if query.Layout != "" {
-		db = db.Where("layout = ?", query.Layout)
-	}
+	db = db.Where("map_id = ?", query.MapID)
 
 	if err := db.First(&mindmapPO).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {

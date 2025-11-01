@@ -85,7 +85,7 @@ func CastMindMapDOs2DTOs(mindmaps []*entity.MindMap) []*def.MindMapDTO {
 // CastMindMapDataDO2DTO 思维导图数据实体转DTO
 func CastMindMapDataDO2DTO(data entity.MindMapData) def.MindMapData {
 	return def.MindMapData{
-		Text:     data.Text,
+		Data:     CastNodeDataDO2DTO(data.Data),
 		Children: gslice.Map(data.Children, CastMindMapDataDO2DTO),
 	}
 }
@@ -93,8 +93,22 @@ func CastMindMapDataDO2DTO(data entity.MindMapData) def.MindMapData {
 // CastMindMapDataDTO2DO 思维导图数据DTO转实体
 func CastMindMapDataDTO2DO(data def.MindMapData) entity.MindMapData {
 	return entity.MindMapData{
-		Text:     data.Text,
+		Data:     CastNodeDataDTO2DO(data.Data),
 		Children: gslice.Map(data.Children, CastMindMapDataDTO2DO),
+	}
+}
+
+// CastNodeDataDO2DTO 节点数据实体转DTO
+func CastNodeDataDO2DTO(data entity.NodeData) def.NodeData {
+	return def.NodeData{
+		Text: data.Text,
+	}
+}
+
+// CastNodeDataDTO2DO 节点数据DTO转实体
+func CastNodeDataDTO2DO(data def.NodeData) entity.NodeData {
+	return entity.NodeData{
+		Text: data.Text,
 	}
 }
 
