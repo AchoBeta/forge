@@ -27,7 +27,19 @@ func Init() {
 	loop.MustInitLoop()
 	coze.InitCozeService()
 	storage.InitUserStorage()
-	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService())
+
+	// snowflake - 从配置文件读取节点ID
+	snowflakeConfig := configs.Config().GetSnowflakeConfig()
+	if err := util.InitSnowflake(snowflakeConfig.NodeID); err != nil {
+		// 初始化失败，直接 panic 提示原因
+		panic(fmt.Sprintf("init snowflake failed: %v", err))
+	}
+
+	// 从配置文件读取JWT配置并创建JWTUtil
+	jwtConfig := configs.Config().GetJWTConfig()
+	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
+
+	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	handler.MustInitHandler(us)
 
 }

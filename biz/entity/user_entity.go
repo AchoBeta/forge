@@ -3,14 +3,34 @@ package entity
 import (
 	"context"
 	"forge/pkg/log/zlog"
+	"time"
+
 	"go.uber.org/zap"
 )
 
+// 实体关注业务 无需gorm tag
 type User struct {
-	UserID   string
-	Name     string
-	Password string
-	Dogs     []*Dog
+	UserID   string `json:"user_id"`   // 用户ID
+	UserName string `json:"user_name"` // 用户名
+	Password string `json:"-"`         //密码 无json
+	Avatar   string `json:"avatar"`    // 头像URL
+
+	//登录方式  二选一
+	Phone string `json:"phone"` // 手机号
+	Email string `json:"email"` // 邮箱
+
+	//用户状态 1：正常 0：禁用
+	Status int `json:"status"`
+
+	// 时间信息
+	CreatedAt   time.Time  `json:"created_at"`    // 创建时间
+	UpdatedAt   time.Time  `json:"updated_at"`    // 更新时间
+	LastLoginAt *time.Time `json:"last_login_at"` // 最后登录时间
+
+	PhoneVerified bool `json:"phone_verified"` // 手机号是否已验证
+	EmailVerified bool `json:"email_verified"` // 邮箱是否已验证
+
+	Dogs []*Dog
 	// ... ex
 }
 

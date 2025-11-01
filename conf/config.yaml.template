@@ -16,3 +16,10 @@ redis:
   port: 16379
   password:
   db: 0
+
+jwt:         # jwt配置
+  secret_key: forge-secret-key-change-in-production
+  expire_hours: 168  # 7天(24*7)
+
+snowflake:   # 雪花ID配置
+  node_id: 1  # 节点ID，范围0-1023，每个实例配置不同的值

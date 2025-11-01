@@ -5,6 +5,7 @@ import (
 	"forge/infra/configs"
 	"forge/interface/middleware"
 	"forge/pkg/log/zlog"
+
 	"github.com/gin-gonic/gin"
 	"github.com/spf13/cast"
 )
@@ -20,7 +21,7 @@ func register() (router *gin.Engine) {
 	r.RouterGroup = *r.Group("/api/biz/v1", middleware.AddTracer())
 	loadUserService(r.Group("user"))
 
-	return router
+	return r
 }
 
 func run(router *gin.Engine) {
@@ -41,4 +42,12 @@ const (
 
 func loadUserService(r *gin.RouterGroup) {
 	r.Handle(POST, "login", Login())
+
+	// 注册接口 user/api/biz/v1/register
+	// [POST] /api/biz/v1/user/register
+	r.Handle(POST, "register", Register())
+
+	// 重置密码接口
+	// [POST] /api/biz/v1/user/resetpassword
+	r.Handle(POST, "resetpassword", ResetPassword())
 }
