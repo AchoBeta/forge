@@ -41,4 +41,9 @@ var (
 	USER_ACCOUNT_ALREADY_EXIST = MsgCode{Code: 2008, Msg: "账号已存在"}
 	CAPTCHA_ERROR              = MsgCode{Code: 2100, Msg: "验证码错误"}
 	INSUFFICENT_PERMISSIONS    = MsgCode{Code: 2200, Msg: "权限不足"}
+
+	/* 思维导图错误 3000 ~ 3999 */
+	MINDMAP_NOT_FOUND        = MsgCode{Code: 3001, Msg: "思维导图不存在"}
+	MINDMAP_ALREADY_EXISTS   = MsgCode{Code: 3002, Msg: "思维导图已存在"}
+	MINDMAP_PERMISSION_DENIED = MsgCode{Code: 3003, Msg: "思维导图权限不足"}
 )

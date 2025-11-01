@@ -7,11 +7,12 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forge/biz/userservice"
-	"forge/constant"
+	// "forge/constant"
 	"forge/interface/def"
 	"forge/interface/handler"
 	"forge/pkg/log/zlog"
-	"forge/pkg/loop"
+
+	// "forge/pkg/loop"
 	"forge/pkg/response"
 	"forge/util"
 )
@@ -90,9 +91,10 @@ func Login() gin.HandlerFunc {
 			return
 		}
 
-		ctx, sp := loop.GetNewSpan(ctx, "login", constant.LoopSpanType_Root)
+		// TODO: cozeloop配置好后启用
+		// ctx, sp := loop.GetNewSpan(ctx, "login", constant.LoopSpanType_Root)
 		rsp, err := handler.GetHandler().Login(ctx, req)
-		loop.SetSpanAllInOne(ctx, sp, req, rsp, err)
+		// loop.SetSpanAllInOne(ctx, sp, req, rsp, err)
 		zlog.CtxAllInOne(ctx, "login", req, rsp, err)
 
 		// 语法糖包装

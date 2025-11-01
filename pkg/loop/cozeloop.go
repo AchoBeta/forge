@@ -14,11 +14,11 @@ var client cozeloop.Client
 func MustInitLoop() {
 	// todo需要初始化
 	// ref: https://github.com/coze-dev/cozeloop-go
-	_client, err := cozeloop.NewClient()
-	if err != nil {
-		panic(err)
-	}
-	client = _client
+	//_client, err := cozeloop.NewClient()
+	//if err != nil {
+	//	panic(err)
+	//}
+	//client = _client
 
 }
 

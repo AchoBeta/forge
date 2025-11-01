@@ -3,6 +3,7 @@ package initalize
 import (
 	_ "embed"
 	"fmt"
+	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
 	"forge/infra/cache"
 	"forge/infra/configs"
@@ -10,8 +11,10 @@ import (
 	"forge/infra/database"
 	"forge/infra/storage"
 	"forge/interface/handler"
+	"forge/interface/router"
 	"forge/pkg/log"
-	"forge/pkg/loop"
+
+	// "forge/pkg/loop"
 	"forge/util"
 )
 
@@ -24,9 +27,11 @@ func Init() {
 	log.InitLog(path, configs.Config())
 	database.MustInitDatabase(configs.Config())
 	cache.MustInitCache(configs.Config())
-	loop.MustInitLoop()
+	// TODO: cozeloop配置好后启用
+	// loop.MustInitLoop()
 	coze.InitCozeService()
 	storage.InitUserStorage()
+	storage.InitMindMapStorage()
 
 	// snowflake - 从配置文件读取节点ID
 	snowflakeConfig := configs.Config().GetSnowflakeConfig()
@@ -40,7 +45,11 @@ func Init() {
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
-	handler.MustInitHandler(us)
+	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
+	handler.MustInitHandler(us, mms)
+
+	// 初始化JWT鉴权中间件
+	router.InitJWTAuth(us)
 
 }
 func initPath() string {

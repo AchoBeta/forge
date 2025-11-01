@@ -3,6 +3,7 @@ package middleware
 import (
 	"forge/constant"
 	"forge/pkg/log/zlog"
+
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -24,8 +25,7 @@ func AddTracer() gin.HandlerFunc {
 		// 增加Logid
 		ctx := gCtx.Request.Context()
 		ctx = zlog.WithLogKey(ctx, zap.String(constant.LOGID, logID))
-		gCtx.Request.WithContext(ctx)
+		gCtx.Request = gCtx.Request.WithContext(ctx)
 		gCtx.Next()
-		return
 	}
 }
