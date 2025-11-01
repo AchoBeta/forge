@@ -28,7 +28,7 @@ func Init() {
 	coze.InitCozeService()
 	storage.InitUserStorage()
 
-	// snowflake
+	// snowflake        // 节点id作为配置项，避免所有实例都将使用相同的节点 ID
 	_ = util.InitSnowflake(1)
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService())

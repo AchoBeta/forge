@@ -2,6 +2,7 @@ package util
 
 import (
 	"errors"
+	"time"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -58,9 +59,23 @@ func NewJWTUtil(secretKey string, expireHours int) *JWTUtil {
 	}
 }
 
-/* 生成jwt令牌
-func (j *JWTUtil) GenerateToken(userID string) (string, error)
-*/
+// GenerateToken 生成jwt令牌
+func (j *JWTUtil) GenerateToken(userID string) (string, error) {
+	if userID == "" {
+		return "", errors.New("userID 不能为空")
+	}
+
+	claims := &Claims{
+		UserID: userID,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(j.expireHours) * time.Hour)),
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString(j.secretKey)
+}
 
 /* 验证JWT令牌
 func (j *JWTUtil) ValidateToken(tokenString string) (*Claims, error)

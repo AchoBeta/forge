@@ -6,7 +6,7 @@ import (
 )
 
 type IUserService interface {
-	Login(ctx context.Context, username, password string) (*entity.User, error)
+	Login(ctx context.Context, account, accountType, password string) (*entity.User, string, error) // 返回用户、token、错误
 
 	// Register 基于手机号/邮箱进行注册
 	Register(ctx context.Context, req *RegisterParams) (*entity.User, error)
@@ -32,3 +32,8 @@ type ResetPasswordParams struct {
 	NewPassword     string
 	ConfirmPassword string
 }
+
+const (
+	AccountTypePhone = "phone"
+	AccountTypeEmail = "email"
+)

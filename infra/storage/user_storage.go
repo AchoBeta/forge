@@ -49,8 +49,8 @@ func (u *userPersistence) UpdateUser(ctx context.Context, updateInfo *repo.UserU
 	updates := map[string]any{}
 
 	// 基础信息
-	if updateInfo.Name != nil {
-		updates["name"] = *updateInfo.Name
+	if updateInfo.UserName != nil {
+		updates["name"] = *updateInfo.UserName
 	}
 	if updateInfo.Avatar != nil {
 		updates["avatar"] = *updateInfo.Avatar
@@ -103,8 +103,8 @@ func (u *userPersistence) GetUser(ctx context.Context, query repo.UserQuery) (*e
 	switch {
 	case query.UserID != "":
 		err = db.Where("user_id = ?", query.UserID).First(&userPO).Error
-	case query.Name != "":
-		err = db.Where("name = ?", query.Name).First(&userPO).Error
+	case query.UserName != "":
+		err = db.Where("username = ?", query.UserName).First(&userPO).Error
 	case query.Phone != "":
 		err = db.Where("phone = ?", query.Phone).First(&userPO).Error
 	case query.Email != "":
@@ -113,7 +113,7 @@ func (u *userPersistence) GetUser(ctx context.Context, query repo.UserQuery) (*e
 		// 第三方登录查询逻辑
 		return nil, nil
 	default:
-		return nil, nil
+		return nil, fmt.Errorf("invalid user query: no query field provided")
 	}
 
 	if err != nil {

@@ -20,17 +20,25 @@ type Dog struct {
 
 // ---------登录相关----------
 type LoginReq struct {
-	UserName string `json:"username"`
-	Password string `json:"password"`
+	Account     string `json:"account"`      // 账号（手机号或邮箱）
+	AccountType string `json:"account_type"` // 账号类型：phone（手机号）或 email（邮箱）
+	Password    string `json:"password"`     // 密码
 }
+
 type LoginResp struct {
-	User *User `json:"user"`
+	Token    string `json:"token,omitempty"`     // JWT token
+	UserID   string `json:"user_id,omitempty"`   // 用户ID
+	UserName string `json:"user_name,omitempty"` // 用户名
+	Avatar   string `json:"avatar,omitempty"`    // 头像
+	Phone    string `json:"phone,omitempty"`     // 手机号
+	Email    string `json:"email,omitempty"`     // 邮箱
+	Success  bool   `json:"success"`             // 登录是否成功
 }
 
 //---------注册相关------------
 // 注册：用户名 + 手机号/邮箱 + 验证码 + 设置密码
 type RegisterReq struct {
-	UserName    string `json:"user_name,omitempty"`
+	UserName    string `json:"user_name"`
 	Account     string `json:"account"`
 	AccountType string `json:"account_type"` // 手机号或邮箱
 	Code        string `json:"code"`
@@ -38,7 +46,7 @@ type RegisterReq struct {
 }
 
 type RegisterResp struct {
-	// 只需返回成功信息
+	Success bool `json:"success"` // 注册是否成功
 }
 
 //---------重置密码-----------

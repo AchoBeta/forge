@@ -55,8 +55,8 @@ type UserUpdateInfo struct {
 	UserID string // 用户ID
 
 	// 基础信息
-	Name   *string // 用户名
-	Avatar *string // 头像URL
+	UserName *string // 用户名
+	Avatar   *string // 头像URL
 
 	// 联系方式
 	Phone *string // 手机号
@@ -83,10 +83,10 @@ type UserUpdateInfo struct {
 
 // UserQuery 用户查询条件
 type UserQuery struct {
-	UserID string // 根据用户ID查询
-	Name   string // 根据用户名查询
-	Phone  string // 根据手机号查询
-	Email  string // 根据邮箱查询
+	UserID   string // 根据用户ID查询
+	UserName string // 根据用户名查询
+	Phone    string // 根据手机号查询
+	Email    string // 根据邮箱查询
 	// Platform string // 第三方平台
 	// ThirdID  string // 第三方ID
 }
@@ -97,8 +97,8 @@ func NewUserQueryByID(userID string) UserQuery {
 }
 
 // NewUserQueryByName 创建根据用户名查询的条件
-func NewUserQueryByName(name string) UserQuery {
-	return UserQuery{Name: name}
+func NewUserQueryByName(username string) UserQuery {
+	return UserQuery{UserName: username}
 }
 
 // NewUserQueryByPhone 创建根据手机号查询的条件

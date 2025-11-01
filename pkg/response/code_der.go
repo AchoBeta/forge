@@ -29,6 +29,7 @@ var (
 	PARAM_IS_BLANK     = MsgCode{Code: 1002, Msg: "参数为空"}
 	PARAM_TYPE_ERROR   = MsgCode{Code: 1003, Msg: "参数类型错误"}
 	PARAM_NOT_COMPLETE = MsgCode{Code: 1004, Msg: "参数缺失"}
+	INVALID_PARAMS     = MsgCode{Code: 1005, Msg: "请求体无效"}
 
 	PARAM_FILE_SIZE_TOO_BIG = MsgCode{Code: 1010, Msg: "文件过大"}
 

@@ -3,6 +3,7 @@ package database
 import (
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
+
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -17,5 +18,6 @@ func initMysql(config configs.IConfig) error {
 	}
 	zlog.Infof("MySQL连接数据库成功！")
 	db = _db
+
 	return nil
 }

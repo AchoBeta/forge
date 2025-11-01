@@ -2,14 +2,19 @@ package userservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"forge/biz/adapter"
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/biz/types"
-	"forge/infra/coze"
 	"forge/pkg/log/zlog"
 	"forge/util"
+)
+
+var (
+	// ErrUserNotFound 表示用户不存在
+	ErrUserNotFound = errors.New("user not found")
 )
 
 // 最好的设计方案：
@@ -18,7 +23,14 @@ import (
 type UserServiceImpl struct {
 	userRepo    repo.UserRepo
 	cozeService adapter.CozeService
+	jwtUtil     *util.JWTUtil
 }
+
+// 默认JWT配置（可在配置文件中配置）
+const (
+	DefaultJWTSecretKey   = "forge-secret-key-change-in-production"
+	DefaultJWTExpireHours = 24 * 7 // 过期时间7天
+)
 
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
@@ -26,39 +38,75 @@ func NewUserServiceImpl(
 	return &UserServiceImpl{
 		userRepo:    userRepo,
 		cozeService: cozeService,
+		jwtUtil:     util.NewJWTUtil(DefaultJWTSecretKey, DefaultJWTExpireHours),
 	}
-
 }
 
-func (u *UserServiceImpl) Login(ctx context.Context, username, password string) (*entity.User, error) {
-	// 这里可以看你自己需要是否加函数级打点
-	user := &entity.User{
-		UserName: username,
-		Password: password,
-	}
-	err := u.userRepo.CreateUser(ctx, user)
-	if err != nil {
-		return nil, err
+// Login 登录：根据账号和密码进行登录
+func (u *UserServiceImpl) Login(ctx context.Context, account, accountType, password string) (*entity.User, string, error) {
+	// 参数校验
+	if account == "" || accountType == "" || password == "" {
+		zlog.CtxErrorf(ctx, "invalid params for login: account, accountType or password is empty")
+		return nil, "", fmt.Errorf("invalid params for login")
 	}
 
-	// 这里如果要调用coze service有两种方法
-	// 第一种
+	// 根据账号类型查找用户
+	user, err := u.findUserByAccount(ctx, account, accountType)
+	if err != nil {
+		// 如果用户不存在，返回错误
+		if errors.Is(err, ErrUserNotFound) {
+			zlog.CtxErrorf(ctx, "user not found: %s", account)
+			return nil, "", fmt.Errorf("account or password incorrect")
+		}
+		// 其他错误（数据库错误等）
+		return nil, "", err
+	}
+
+	// 验证密码
+	match, err := util.ComparePassword(user.Password, password)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "compare password failed: %v", err)
+		return nil, "", fmt.Errorf("internal error: failed to verify password")
+	}
+	if !match {
+		zlog.CtxErrorf(ctx, "password incorrect for user: %s", user.UserID)
+		return nil, "", fmt.Errorf("account or password incorrect")
+	}
+
+	// 生成JWT token
+	token, err := u.jwtUtil.GenerateToken(user.UserID)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "generate token failed: %v", err)
+		return nil, "", fmt.Errorf("failed to generate token")
+	}
+
+	// 方法一  通过注入的 cozeService 接口调用 哇哦
 	result, err := u.cozeService.RunWorkflow(ctx, &adapter.RunWorkflowReq{})
 	if err != nil {
-		zlog.CtxErrorf(ctx, "run workflow failed: %w", err)
-		return nil, err
+		zlog.CtxErrorf(ctx, "run workflow failed: %v", err)
+	} else {
+		zlog.CtxInfof(ctx, "result:%v", result)
 	}
-	zlog.CtxInfof(ctx, "result:%v", result)
-	// 第二种
-	result, err = coze.GetCozeService().RunWorkflow(ctx, &adapter.RunWorkflowReq{})
-	if err != nil {
-		zlog.CtxErrorf(ctx, "run workflow failed: %w", err)
-		return nil, err
-	}
-	zlog.CtxInfof(ctx, "result:%v", result)
-	// anything you want
 
-	return user, nil
+	// 方法二
+	// result, err = coze.GetCozeService().RunWorkflow(ctx, &adapter.RunWorkflowReq{})
+	// if err != nil {
+	// 	zlog.CtxErrorf(ctx, "run workflow failed: %v", err)
+	// 	return nil, "", err
+	// }
+	// zlog.CtxInfof(ctx, "result:%v", result)
+	// ============================================================
+
+	// 更新最后登录时间（可选）
+	// lastLoginAt := time.Now()
+	// updateInfo := &repo.UserUpdateInfo{
+	// 	UserID:     user.UserID,
+	// 	LastLoginAt: &lastLoginAt,
+	// }
+	// _ = u.userRepo.UpdateUser(ctx, updateInfo)
+
+	zlog.CtxInfof(ctx, "login success for user: %s", user.UserID)
+	return user, token, nil
 }
 
 // Register 基于手机号/邮箱进行注册
@@ -70,22 +118,25 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	}
 
 	// 检查账号是否已存在
-	switch req.AccountType {
-	case "phone":
-		query := repo.NewUserQueryByPhone(req.Account)
-		if exist, _ := u.userRepo.GetUser(ctx, query); exist != nil {
-			zlog.CtxErrorf(ctx, "phone already registered")
-			return nil, fmt.Errorf("phone already registered")
+	existUser, err := u.findUserByAccount(ctx, req.Account, req.AccountType)
+	if err != nil {
+		// 账号不存在，可以继续注册
+		if errors.Is(err, ErrUserNotFound) {
+			// 用户不存在，继续注册流程
+		} else {
+			// 其他错误，直接返回
+			return nil, err
 		}
-	case "email":
-		query := repo.NewUserQueryByEmail(req.Account)
-		if exist, _ := u.userRepo.GetUser(ctx, query); exist != nil {
-			zlog.CtxErrorf(ctx, "email already registered")
-			return nil, fmt.Errorf("email already registered")
+	} else if existUser != nil {
+		// 用户已存在，返回错误
+		var accountField string
+		if req.AccountType == types.AccountTypePhone {
+			accountField = "phone"
+		} else {
+			accountField = "email"
 		}
-	default:
-		zlog.CtxErrorf(ctx, "unsupported accountType: %s", req.AccountType)
-		return nil, fmt.Errorf("unsupported accountType: %s", req.AccountType)
+		zlog.CtxErrorf(ctx, "%s already registered: %s", accountField, req.Account)
+		return nil, fmt.Errorf("%s already registered", accountField)
 	}
 
 	// 校验验证码 code（短信/邮箱） 占位
@@ -113,16 +164,53 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		Password: hash,
 		// 根据 accountType 填写登录方式字段
 	}
-	if req.AccountType == "phone" {
+	if req.AccountType == types.AccountTypePhone {
 		user.Phone = req.Account
 		user.PhoneVerified = true
-	} else if req.AccountType == "email" {
+	} else if req.AccountType == types.AccountTypeEmail {
 		user.Email = req.Account
 		user.EmailVerified = true
 	}
 
 	if err := u.userRepo.CreateUser(ctx, user); err != nil {
 		return nil, err
+	}
+
+	return user, nil
+}
+
+// findUserByAccount 根据账号类型查找用户 抽离重复判断逻辑
+// 返回值说明：
+//   - 如果返回错误不为nil，表示数据库查询出错（内部错误）或账号类型不支持
+//   - 如果用户为nil且错误为nil，表示用户不存在，返回"user not found"错误
+//   - 如果用户不为nil，表示找到用户，正常返回
+func (u *UserServiceImpl) findUserByAccount(ctx context.Context, account, accountType string) (*entity.User, error) {
+	var query repo.UserQuery
+	var accountField string
+
+	switch accountType {
+	case types.AccountTypePhone:
+		query = repo.NewUserQueryByPhone(account)
+		accountField = "phone"
+	case types.AccountTypeEmail:
+		query = repo.NewUserQueryByEmail(account)
+		accountField = "email"
+	default:
+		zlog.CtxErrorf(ctx, "unsupported accountType: %s", accountType)
+		return nil, fmt.Errorf("unsupported accountType: %s", accountType)
+	}
+
+	user, err := u.userRepo.GetUser(ctx, query)
+	if err != nil {
+		// 数据库查询错误，返回内部错误
+		zlog.CtxErrorf(ctx, "failed to get user by %s: %v", accountField, err)
+		return nil, fmt.Errorf("internal error: failed to query user")
+	}
+
+	if user == nil {
+		// 用户不存在
+		zlog.CtxErrorf(ctx, "user not found by %s: %s", accountField, account)
+		return nil, ErrUserNotFound
 	}
 
 	return user, nil
@@ -147,34 +235,9 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 	}
 
 	// 根据账号类型查找用户
-	var user *entity.User
-	var err error
-	switch req.AccountType {
-	case "phone":
-		query := repo.NewUserQueryByPhone(req.Account)
-		user, err = u.userRepo.GetUser(ctx, query)
-		if err != nil {
-			zlog.CtxErrorf(ctx, "get user by phone failed: %v", err)
-			return fmt.Errorf("user not found")
-		}
-		if user == nil {
-			zlog.CtxErrorf(ctx, "user not found by phone: %s", req.Account)
-			return fmt.Errorf("user not found")
-		}
-	case "email":
-		query := repo.NewUserQueryByEmail(req.Account)
-		user, err = u.userRepo.GetUser(ctx, query)
-		if err != nil {
-			zlog.CtxErrorf(ctx, "get user by email failed: %v", err)
-			return fmt.Errorf("user not found")
-		}
-		if user == nil {
-			zlog.CtxErrorf(ctx, "user not found by email: %s", req.Account)
-			return fmt.Errorf("user not found")
-		}
-	default:
-		zlog.CtxErrorf(ctx, "unsupported accountType: %s", req.AccountType)
-		return fmt.Errorf("unsupported accountType: %s", req.AccountType)
+	user, err := u.findUserByAccount(ctx, req.Account, req.AccountType)
+	if err != nil {
+		return err
 	}
 
 	// 4. 校验验证码 code（短信/邮箱），此处预留
