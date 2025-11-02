@@ -3,10 +3,15 @@ package userservice
 import (
 	"context"
 	"errors"
+	"fmt"
+	"math/rand"
+	"time"
+
 	"forge/biz/adapter"
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/biz/types"
+	"forge/infra/cache"
 	"forge/pkg/log/zlog"
 	"forge/util"
 )
@@ -28,25 +33,30 @@ var (
 	ErrInternalError = errors.New("internal error")
 	// ErrPermissionDenied 表示权限被拒绝
 	ErrPermissionDenied = errors.New("permission denied")
+	// ErrVerificationCodeIncorrect 表示验证码错误
+	ErrVerificationCodeIncorrect = errors.New("verification code incorrect")
 )
 
 // 最好的设计方案：
 // infra的所有函数都是通过接口来用的
 
 type UserServiceImpl struct {
-	userRepo    repo.UserRepo
-	cozeService adapter.CozeService
-	jwtUtil     *util.JWTUtil
+	userRepo     repo.UserRepo
+	cozeService  adapter.CozeService
+	jwtUtil      *util.JWTUtil
+	emailService adapter.EmailService
 }
 
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
 	cozeService adapter.CozeService,
-	jwtUtil *util.JWTUtil) *UserServiceImpl {
+	jwtUtil *util.JWTUtil,
+	emailService adapter.EmailService) *UserServiceImpl {
 	return &UserServiceImpl{
-		userRepo:    userRepo,
-		cozeService: cozeService,
-		jwtUtil:     jwtUtil,
+		userRepo:     userRepo,
+		cozeService:  cozeService,
+		jwtUtil:      jwtUtil,
+		emailService: emailService,
 	}
 }
 
@@ -147,7 +157,10 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		return nil, ErrUserAlreadyExists
 	}
 
-	// 校验验证码 code（短信/邮箱） 占位
+	// 校验验证码 code（短信/邮箱）
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code, types.PurposeRegister); err != nil {
+		return nil, err
+	}
 
 	//------------------------------------------------
 
@@ -253,9 +266,10 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 		return err
 	}
 
-	// 4. 校验验证码 code（短信/邮箱），此处预留
-
-	// 验证码校验逻辑应该在这里实现
+	// 4. 校验验证码 code（短信/邮箱）
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code, types.PurposeResetPassword); err != nil {
+		return err
+	}
 
 	// 验证新密码强度
 	if err := util.ValidatePasswordStrength(req.NewPassword); err != nil {
@@ -313,4 +327,69 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 	}
 
 	return user, nil
+}
+
+// SendVerificationCode 发送验证码
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) (string, error) {
+	// 参数校验
+	if account == "" || accountType == "" || purpose == "" {
+		zlog.CtxErrorf(ctx, "invalid params for send verification code")
+		return "", ErrInvalidParams
+	}
+
+	// 目前只支持邮箱验证码
+	if accountType != types.AccountTypeEmail {
+		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
+		return "", ErrUnsupportedAccountType
+	}
+
+	// 生成6位随机验证码
+	code := generateVerificationCode()
+
+	// 发送邮件
+	if err := u.emailService.SendVerificationCode(ctx, account, code, purpose); err != nil {
+		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
+		return "", ErrInternalError
+	}
+
+	return code, nil
+}
+
+// VerifyCode 校验验证码
+func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code, purpose string) error {
+	if account == "" || code == "" || purpose == "" {
+		return ErrInvalidParams
+	}
+
+	// 从Redis获取验证码
+	key := fmt.Sprintf("verification_code:%s:%s", purpose, account)
+	storedCode, err := cache.GetRedis(key)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "get verification code from redis failed: %v", err)
+		return ErrInternalError
+	}
+
+	if storedCode == "" {
+		zlog.CtxWarnf(ctx, "verification code not found or expired for: %s", account)
+		return ErrVerificationCodeIncorrect
+	}
+
+	if storedCode != code {
+		zlog.CtxWarnf(ctx, "verification code mismatch for: %s", account)
+		return ErrVerificationCodeIncorrect
+	}
+
+	// 校验成功后删除验证码（一次性使用）
+	if err := cache.DelRedis(key); err != nil {
+		zlog.CtxErrorf(ctx, "delete verification code from redis failed: %v", err)
+		// 不返回错误，因为验证码已经校验成功
+	}
+
+	return nil
+}
+
+// generateVerificationCode 生成6位随机验证码
+func generateVerificationCode() string {
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
+	return fmt.Sprintf("%06d", r.Intn(1000000))
 }

@@ -9,6 +9,7 @@ import (
 	"forge/infra/configs"
 	"forge/infra/coze"
 	"forge/infra/database"
+	"forge/infra/email"
 	"forge/infra/storage"
 	"forge/interface/handler"
 	"forge/interface/router"
@@ -30,6 +31,7 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
+	email.InitEmailService(configs.Config())
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 
@@ -44,7 +46,7 @@ func Init() {
 	jwtConfig := configs.Config().GetJWTConfig()
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
-	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
+	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, email.GetEmailService())
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
 	handler.MustInitHandler(us, mms)
 

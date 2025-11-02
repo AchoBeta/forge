@@ -23,3 +23,10 @@ jwt:         # jwt配置
 
 snowflake:   # 雪花ID配置
   node_id: 1  # 节点ID，范围0-1023，每个实例配置不同的值
+
+smtp:        # SMTP邮件配置
+  smtpHost: smtp.qq.com
+  smtpPort: 587
+  smtpUser: email@qq.com       # 发送方邮箱
+  smtpPass: auth-code          # QQ邮箱授权码
+  encodedName: Forge-验证码    # 发件人显示名称

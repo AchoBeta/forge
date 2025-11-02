@@ -16,6 +16,7 @@ type IConfig interface {
 	GetLoggerConfig() LoggerConfig
 	GetJWTConfig() JWTConfig
 	GetSnowflakeConfig() SnowflakeConfig
+	GetSMTPConfig() SMTPConfig // SMTP服务 发送邮件
 }
 
 var (
@@ -55,6 +56,11 @@ func (c *config) GetJWTConfig() JWTConfig {
 // snowflake配置读取
 func (c *config) GetSnowflakeConfig() SnowflakeConfig {
 	return c.SnowflakeConfig
+}
+
+// smtp配置读取
+func (c *config) GetSMTPConfig() SMTPConfig {
+	return c.SMTPConfig
 }
 
 func mustInit(path string) *config {
@@ -103,6 +109,7 @@ type config struct {
 	RedisConfig     RedisConfig       `mapstructure:"redis"`
 	JWTConfig       JWTConfig         `mapstructure:"jwt"`
 	SnowflakeConfig SnowflakeConfig   `mapstructure:"snowflake"`
+	SMTPConfig      SMTPConfig        `mapstructure:"smtp"`
 }
 
 type ApplicationConfig struct {
@@ -143,4 +150,13 @@ type JWTConfig struct {
 
 type SnowflakeConfig struct {
 	NodeID int64 `mapstructure:"node_id"`
+}
+
+// SMTP配置
+type SMTPConfig struct {
+	SmtpHost    string `mapstructure:"smtp_host"`
+	SmtpPort    int    `mapstructure:"smtp_port"`
+	SmtpUser    string `mapstructure:"smtp_user"`
+	SmtpPass    string `mapstructure:"smtp_pass"`
+	EncodedName string `mapstructure:"encoded_name"`
 }

@@ -1,3 +1,7 @@
 conf/config.yaml
 ../log/*
 output/*
+
+# 可执行文件
+*.exe
+forge.exe

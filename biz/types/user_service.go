@@ -16,6 +16,9 @@ type IUserService interface {
 
 	// GetUserByID 根据用户ID获取用户信息（用于JWT鉴权等场景）
 	GetUserByID(ctx context.Context, userID string) (*entity.User, error)
+
+	// SendVerificationCode 发送验证码
+	SendVerificationCode(ctx context.Context, account, accountType, purpose string) (string, error)
 }
 
 // 注册参数
@@ -39,4 +42,9 @@ type ResetPasswordParams struct {
 const (
 	AccountTypePhone = "phone"
 	AccountTypeEmail = "email"
+)
+
+const (
+	PurposeRegister      = "register"       // 注册
+	PurposeResetPassword = "reset_password" // 重置密码
 )

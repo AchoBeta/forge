@@ -62,4 +62,16 @@ type ResetPasswordResp struct {
 	Success bool `json:"success"`
 }
 
+//---------发送验证码-----------
+type SendVerificationCodeReq struct {
+	Account     string `json:"account"`      // 账号（手机号或邮箱）  目前只支持邮箱 邮件收取验证码
+	AccountType string `json:"account_type"` // 账号类型：phone（手机号）或 email（邮箱）
+	Purpose     string `json:"purpose"`      // 用途：register（注册）或 reset_password（重置密码）
+}
+
+type SendVerificationCodeResp struct {
+	Success bool   `json:"success"`        // 发送是否成功
+	Code    string `json:"code,omitempty"` // 验证码（开发环境可返回，生产环境不返回）
+}
+
 //---------第三方--------- 暂时先不做

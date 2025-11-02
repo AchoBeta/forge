@@ -3,8 +3,11 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
+
 	"github.com/go-redis/redis/v8"
 )
 
@@ -48,4 +51,32 @@ func initRedis(config configs.IConfig) error {
 	}
 	redisClient = client
 	return nil
+}
+
+// SetRedis 设置键值对，带过期时间
+func SetRedis(key string, value string, expiration time.Duration) error {
+	if redisClient == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+	return redisClient.Set(context.Background(), key, value, expiration).Err()
+}
+
+// GetRedis 获取键对应的值
+func GetRedis(key string) (string, error) {
+	if redisClient == nil {
+		return "", fmt.Errorf("redis client not initialized")
+	}
+	result, err := redisClient.Get(context.Background(), key).Result()
+	if err == redis.Nil {
+		return "", nil // 键不存在
+	}
+	return result, err
+}
+
+// DelRedis 删除键
+func DelRedis(key string) error {
+	if redisClient == nil {
+		return fmt.Errorf("redis client not initialized")
+	}
+	return redisClient.Del(context.Background(), key).Err()
 }
