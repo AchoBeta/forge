@@ -70,8 +70,7 @@ type SendVerificationCodeReq struct {
 }
 
 type SendVerificationCodeResp struct {
-	Success bool   `json:"success"`        // 发送是否成功
-	Code    string `json:"code,omitempty"` // 验证码（开发环境可返回，生产环境不返回）
+	Success bool `json:"success"` // 发送是否成功
 }
 
 //---------第三方--------- 暂时先不做

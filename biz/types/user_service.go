@@ -18,7 +18,7 @@ type IUserService interface {
 	GetUserByID(ctx context.Context, userID string) (*entity.User, error)
 
 	// SendVerificationCode 发送验证码
-	SendVerificationCode(ctx context.Context, account, accountType, purpose string) (string, error)
+	SendVerificationCode(ctx context.Context, account, accountType, purpose string) error
 }
 
 // 注册参数

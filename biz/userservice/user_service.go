@@ -2,10 +2,10 @@ package userservice
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
-	"math/rand"
-	"time"
+	"math/big"
 
 	"forge/biz/adapter"
 	"forge/biz/entity"
@@ -330,17 +330,17 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 }
 
 // SendVerificationCode 发送验证码
-func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) (string, error) {
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) error {
 	// 参数校验
 	if account == "" || accountType == "" || purpose == "" {
 		zlog.CtxErrorf(ctx, "invalid params for send verification code")
-		return "", ErrInvalidParams
+		return ErrInvalidParams
 	}
 
 	// 目前只支持邮箱验证码
 	if accountType != types.AccountTypeEmail {
 		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
-		return "", ErrUnsupportedAccountType
+		return ErrUnsupportedAccountType
 	}
 
 	// 生成6位随机验证码
@@ -349,10 +349,10 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 	// 发送邮件
 	if err := u.emailService.SendVerificationCode(ctx, account, code, purpose); err != nil {
 		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
-		return "", ErrInternalError
+		return ErrInternalError
 	}
 
-	return code, nil
+	return nil
 }
 
 // VerifyCode 校验验证码
@@ -363,7 +363,7 @@ func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, 
 
 	// 从Redis获取验证码
 	key := fmt.Sprintf("verification_code:%s:%s", purpose, account)
-	storedCode, err := cache.GetRedis(key)
+	storedCode, err := cache.GetRedis(ctx, key)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "get verification code from redis failed: %v", err)
 		return ErrInternalError
@@ -380,7 +380,7 @@ func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, 
 	}
 
 	// 校验成功后删除验证码（一次性使用）
-	if err := cache.DelRedis(key); err != nil {
+	if err := cache.DelRedis(ctx, key); err != nil {
 		zlog.CtxErrorf(ctx, "delete verification code from redis failed: %v", err)
 		// 不返回错误，因为验证码已经校验成功
 	}
@@ -390,6 +390,11 @@ func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, 
 
 // generateVerificationCode 生成6位随机验证码
 func generateVerificationCode() string {
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-	return fmt.Sprintf("%06d", r.Intn(1000000))
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		// crypto/rand 的失败是一个罕见且严重的事件，表明系统的熵源存在问题。
+		// 在这种情况下，记录严重错误并 panic 是一个合理的做法。
+		panic(fmt.Sprintf("failed to generate cryptographically secure random number for verification code: %v", err))
+	}
+	return fmt.Sprintf("%06d", n.Int64())
 }

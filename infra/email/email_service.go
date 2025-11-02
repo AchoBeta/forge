@@ -3,7 +3,6 @@ package email
 import (
 	"context"
 	"fmt"
-	"html"
 	"time"
 
 	"forge/biz/adapter"
@@ -34,12 +33,9 @@ func GetEmailService() adapter.EmailService {
 func (e *emailServiceImpl) SendVerificationCode(ctx context.Context, email, code, purpose string) error {
 	smtpCfg := e.smtpConfig.GetSMTPConfig()
 
-	encodedName := encodeChineseName(smtpCfg.EncodedName)
-	fromAddr := fmt.Sprintf("%s <%s>", encodedName, smtpCfg.SmtpUser)
-
 	// 创建邮件消息
 	m := gomail.NewMessage()
-	m.SetHeader("From", fromAddr)
+	m.SetHeader("From", m.FormatAddress(smtpCfg.SmtpUser, smtpCfg.EncodedName))
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "您的验证码")
 
@@ -100,27 +96,27 @@ func (e *emailServiceImpl) SendVerificationCode(ctx context.Context, email, code
 
 	m.SetBody("text/html", emailBody)
 
+	// 先将验证码存储到 Redis，10分钟过期
+	key := fmt.Sprintf("verification_code:%s:%s", purpose, email)
+	if err := cache.SetRedis(ctx, key, code, 10*time.Minute); err != nil {
+		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
+		// 存储失败，直接返回错误，不继续发送邮件
+		return fmt.Errorf("存储验证码失败: %w", err)
+	}
+
 	// 创建邮件发送器
 	d := gomail.NewDialer(smtpCfg.SmtpHost, smtpCfg.SmtpPort, smtpCfg.SmtpUser, smtpCfg.SmtpPass)
 
 	// 发送邮件
 	if err := d.DialAndSend(m); err != nil {
 		zlog.CtxErrorf(ctx, "发送邮件失败: %v", err)
+		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
+		if delErr := cache.DelRedis(ctx, key); delErr != nil {
+			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+		}
 		return fmt.Errorf("发送邮件失败: %w", err)
-	}
-
-	// 将验证码存储到 Redis ，10分钟过期
-	key := fmt.Sprintf("verification_code:%s:%s", purpose, email)
-	if err := cache.SetRedis(key, code, 10*time.Minute); err != nil {
-		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
-		// 这里不返回错误，因为邮件已经发送成功
 	}
 
 	zlog.CtxInfof(ctx, "验证码发送成功，邮箱: %s, 用途: %s", email, purpose)
 	return nil
-}
-
-// encodeChineseName 对中文发件人名称进行编码
-func encodeChineseName(name string) string {
-	return html.EscapeString(name)
 }

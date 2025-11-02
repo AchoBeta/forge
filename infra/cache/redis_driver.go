@@ -45,7 +45,7 @@ func initRedis(config configs.IConfig) error {
 		TLSConfig:          nil,
 		Limiter:            nil,
 	})
-	if _, err := client.Ping(context.Background()).Result(); err != nil {
+	if _, err := client.Ping(ctx).Result(); err != nil {
 		zlog.Errorf("redis无法链接 %v", err)
 		return err
 	}
@@ -54,19 +54,19 @@ func initRedis(config configs.IConfig) error {
 }
 
 // SetRedis 设置键值对，带过期时间
-func SetRedis(key string, value string, expiration time.Duration) error {
+func SetRedis(ctx context.Context, key string, value string, expiration time.Duration) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
-	return redisClient.Set(context.Background(), key, value, expiration).Err()
+	return redisClient.Set(ctx, key, value, expiration).Err()
 }
 
 // GetRedis 获取键对应的值
-func GetRedis(key string) (string, error) {
+func GetRedis(ctx context.Context, key string) (string, error) {
 	if redisClient == nil {
 		return "", fmt.Errorf("redis client not initialized")
 	}
-	result, err := redisClient.Get(context.Background(), key).Result()
+	result, err := redisClient.Get(ctx, key).Result()
 	if err == redis.Nil {
 		return "", nil // 键不存在
 	}
@@ -74,9 +74,9 @@ func GetRedis(key string) (string, error) {
 }
 
 // DelRedis 删除键
-func DelRedis(key string) error {
+func DelRedis(ctx context.Context, key string) error {
 	if redisClient == nil {
 		return fmt.Errorf("redis client not initialized")
 	}
-	return redisClient.Del(context.Background(), key).Err()
+	return redisClient.Del(ctx, key).Err()
 }
