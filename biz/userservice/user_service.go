@@ -26,6 +26,8 @@ var (
 	ErrUnsupportedAccountType = errors.New("unsupported account type")
 	// ErrInternalError 表示内部错误
 	ErrInternalError = errors.New("internal error")
+	// ErrPermissionDenied 表示权限被拒绝
+	ErrPermissionDenied = errors.New("permission denied")
 )
 
 // 最好的设计方案：
@@ -87,12 +89,12 @@ func (u *UserServiceImpl) Login(ctx context.Context, account, accountType, passw
 	}
 
 	// 方法一  通过注入的 cozeService 接口调用
-	result, err := u.cozeService.RunWorkflow(ctx, &adapter.RunWorkflowReq{})
-	if err != nil {
-		zlog.CtxErrorf(ctx, "run workflow failed: %v", err)
-	} else {
-		zlog.CtxInfof(ctx, "result:%v", result)
-	}
+	//result, err := u.cozeService.RunWorkflow(ctx, &adapter.RunWorkflowReq{})
+	//if err != nil {
+	//	zlog.CtxErrorf(ctx, "run workflow failed: %v", err)
+	//} else {
+	//	zlog.CtxInfof(ctx, "result:%v", result)
+	//}
 
 	// 方法二
 	// result, err = coze.GetCozeService().RunWorkflow(ctx, &adapter.RunWorkflowReq{})
@@ -281,4 +283,34 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 
 	zlog.CtxInfof(ctx, "reset password successfully for user: %s", user.UserID)
 	return nil
+}
+
+// GetUserByID 根据用户ID获取用户信息（用于JWT鉴权等场景）
+func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*entity.User, error) {
+	// 参数校验
+	if userID == "" {
+		zlog.CtxErrorf(ctx, "userID is required")
+		return nil, ErrInvalidParams
+	}
+
+	// 通过repo查询用户
+	query := repo.NewUserQueryByID(userID)
+	user, err := u.userRepo.GetUser(ctx, query)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to get user by ID: %v", err)
+		return nil, ErrInternalError
+	}
+
+	if user == nil {
+		zlog.CtxWarnf(ctx, "user not found: %s", userID)
+		return nil, ErrUserNotFound
+	}
+
+	// 检查用户状态（业务逻辑应该在service层）
+	if user.Status != entity.UserStatusActive {
+		zlog.CtxWarnf(ctx, "user is disabled: %s", userID)
+		return nil, ErrPermissionDenied
+	}
+
+	return user, nil
 }

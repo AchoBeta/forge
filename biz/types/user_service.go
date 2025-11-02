@@ -13,6 +13,9 @@ type IUserService interface {
 
 	// ResetPassword 重置密码
 	ResetPassword(ctx context.Context, req *ResetPasswordParams) error
+
+	// GetUserByID 根据用户ID获取用户信息（用于JWT鉴权等场景）
+	GetUserByID(ctx context.Context, userID string) (*entity.User, error)
 }
 
 // 注册参数

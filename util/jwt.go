@@ -113,6 +113,10 @@ type Claims struct {
 
 // 创建JWT工具实例
 func NewJWTUtil(secretKey string, expireHours int) *JWTUtil {
+	// 如果过期时间为0或负数，设置默认值为24小时
+	if expireHours <= 0 {
+		expireHours = 24
+	}
 	return &JWTUtil{
 		secretKey:   []byte(secretKey),
 		expireHours: expireHours,

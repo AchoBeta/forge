@@ -34,6 +34,12 @@ type User struct {
 	// ... ex
 }
 
+// 用户状态常量
+const (
+	UserStatusActive   = 1 // 正常
+	UserStatusDisabled = 0 // 禁用
+)
+
 type Dog struct {
 	DogID   string
 	DogName string
@@ -44,7 +50,8 @@ type userCtxKey struct{}
 func WithUser(ctx context.Context, user *User) context.Context {
 	// 设置用户链路 todo可以考虑在jwt层设置
 	ctx = zlog.WithLogKey(ctx, zap.String("user_id", user.UserID))
-	ctx = context.WithValue(ctx, userCtxKey{}, *user)
+	// 存储指针，避免值拷贝
+	ctx = context.WithValue(ctx, userCtxKey{}, user)
 	return ctx
 }
 

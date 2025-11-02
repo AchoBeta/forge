@@ -18,8 +18,15 @@ type userPersistence struct {
 var up *userPersistence
 
 func InitUserStorage() {
+	db := database.ForgeDB()
+
+	// 自动迁移用户表
+	if err := db.AutoMigrate(&po.UserPO{}); err != nil {
+		panic(fmt.Sprintf("failed to auto migrate user table: %v", err))
+	}
+
 	up = &userPersistence{
-		db: database.ForgeDB(),
+		db: db,
 	}
 }
 

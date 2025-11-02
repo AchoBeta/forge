@@ -1,6 +1,8 @@
 package storage
 
 import (
+	"encoding/json"
+	"fmt"
 	"forge/biz/entity"
 	"forge/infra/storage/po"
 )
@@ -55,4 +57,68 @@ func CastUserPO2DO(userPO *po.UserPO) *entity.User {
 	}
 
 	return user
+}
+
+// CastMindMapDO2PO 领域对象转持久化对象
+func CastMindMapDO2PO(mindmap *entity.MindMap) (*po.MindMapPO, error) {
+	if mindmap == nil {
+		return nil, nil
+	}
+
+	// 序列化Data为JSON字符串
+	dataBytes, err := json.Marshal(mindmap.Data)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal mindmap data: %w", err)
+	}
+
+	mindmapPO := &po.MindMapPO{
+		MapID:  mindmap.MapID,
+		UserID: mindmap.UserID,
+		Title:  mindmap.Title,
+		Desc:   mindmap.Desc,
+		Data:   string(dataBytes),
+		Layout: mindmap.Layout,
+	}
+
+	// 处理时间字段
+	if !mindmap.CreatedAt.IsZero() {
+		mindmapPO.CreatedAt = &mindmap.CreatedAt
+	}
+	if !mindmap.UpdatedAt.IsZero() {
+		mindmapPO.UpdatedAt = &mindmap.UpdatedAt
+	}
+
+	return mindmapPO, nil
+}
+
+// CastMindMapPO2DO 持久化对象转领域对象
+func CastMindMapPO2DO(mindmapPO *po.MindMapPO) (*entity.MindMap, error) {
+	if mindmapPO == nil {
+		return nil, nil
+	}
+
+	// 反序列化JSON数据
+	var data entity.MindMapData
+	if err := json.Unmarshal([]byte(mindmapPO.Data), &data); err != nil {
+		return nil, fmt.Errorf("unmarshal data failed: %w", err)
+	}
+
+	mindmap := &entity.MindMap{
+		MapID:  mindmapPO.MapID,
+		UserID: mindmapPO.UserID,
+		Title:  mindmapPO.Title,
+		Desc:   mindmapPO.Desc,
+		Data:   data,
+		Layout: mindmapPO.Layout,
+	}
+
+	// 处理时间字段
+	if mindmapPO.CreatedAt != nil {
+		mindmap.CreatedAt = *mindmapPO.CreatedAt
+	}
+	if mindmapPO.UpdatedAt != nil {
+		mindmap.UpdatedAt = *mindmapPO.UpdatedAt
+	}
+
+	return mindmap, nil
 }
