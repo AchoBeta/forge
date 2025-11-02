@@ -32,7 +32,6 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
-	cos.InitCOSService()
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 
@@ -47,9 +46,13 @@ func Init() {
 	jwtConfig := configs.Config().GetJWTConfig()
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
+	// 依赖注入：创建COS服务实例
+	cosConfig := configs.Config().GetCOSConfig()
+	cosService := cos.NewCOSService(cosConfig)
+
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
-	cs := cosservice.NewCOSServiceImpl(cos.GetCOSService())
+	cs := cosservice.NewCOSServiceImpl(cosService)
 	handler.MustInitHandler(us, mms, cs)
 
 	// 初始化JWT鉴权中间件

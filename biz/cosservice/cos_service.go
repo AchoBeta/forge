@@ -14,6 +14,13 @@ import (
 	"forge/pkg/log/zlog"
 )
 
+const (
+	// MinSTSDuration 腾讯云STS临时密钥最短有效期（秒）
+	MinSTSDuration = 900 // 15分钟
+	// MaxSTSDuration 腾讯云STS临时密钥最长有效期（秒）
+	MaxSTSDuration = 7200 // 2小时
+)
+
 // 错误定义
 var (
 	ErrInvalidParams       = errors.New("参数无效")
@@ -64,8 +71,8 @@ func (s *COSServiceImpl) GetOSSCredentials(ctx context.Context, req *types.GetOS
 	if durationSeconds == 0 {
 		durationSeconds = s.config.STSDuration
 	}
-	if durationSeconds < 60 || durationSeconds > 3600 {
-		zlog.CtxErrorf(ctx, "invalid duration seconds: %d", durationSeconds)
+	if durationSeconds < MinSTSDuration || durationSeconds > MaxSTSDuration {
+		zlog.CtxErrorf(ctx, "invalid duration seconds: %d, must be between %d and %d", durationSeconds, MinSTSDuration, MaxSTSDuration)
 		return nil, ErrInvalidDuration
 	}
 

@@ -2,6 +2,7 @@ package cos
 
 import (
 	"fmt"
+	"forge/biz/adapter"
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
 
@@ -9,31 +10,26 @@ import (
 )
 
 type cosServiceImpl struct {
-	config *configs.COSConfig
+	config configs.COSConfig
 	client *sts.Client
 }
 
-var cs *cosServiceImpl
-
-func InitCOSService() {
-	cfg := configs.Config().GetCOSConfig()
-
+// NewCOSService 创建COS服务实例（依赖注入模式）
+// 通过构造函数接收配置，返回接口类型，便于测试和依赖注入
+func NewCOSService(cfg configs.COSConfig) adapter.COSService {
 	client := sts.NewClient(
 		cfg.SecretID,
 		cfg.SecretKey,
 		nil,
 	)
 
-	cs = &cosServiceImpl{
-		config: &cfg,
+	service := &cosServiceImpl{
+		config: cfg,
 		client: client,
 	}
 
-	zlog.Infof("COS service initialized successfully, region: %s, bucket: %s", cfg.Region, cfg.Bucket)
-}
-
-func GetCOSService() *cosServiceImpl {
-	return cs
+	zlog.Infof("COS service created successfully, region: %s, bucket: %s", cfg.Region, cfg.Bucket)
+	return service
 }
 
 // GetTemporaryCredentials 获取COS临时凭证
