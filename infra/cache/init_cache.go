@@ -1,7 +1,6 @@
 package cache
 
 import (
-	"context"
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
 
@@ -10,7 +9,6 @@ import (
 
 var (
 	redisClient *redis.Client
-	ctx         = context.Background() // Redis操作共享的context
 )
 
 func MustInitCache(config configs.IConfig) {

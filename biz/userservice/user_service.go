@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"forge/biz/adapter"
 	"forge/biz/entity"
@@ -346,9 +347,21 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 	// 生成6位随机验证码
 	code := generateVerificationCode()
 
+	// 先将验证码存储到 Redis，并设置过期时间
+	key := fmt.Sprintf("verification_code:%s:%s", purpose, account)
+	// TODO: 建议将过期时间（10分钟）配置化
+	expiration := 10 * time.Minute
+	if err := cache.SetRedis(ctx, key, code, expiration); err != nil {
+		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
+		return ErrInternalError
+	}
 	// 发送邮件
 	if err := u.emailService.SendVerificationCode(ctx, account, code, purpose); err != nil {
 		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
+		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
+		if delErr := cache.DelRedis(ctx, key); delErr != nil {
+			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+		}
 		return ErrInternalError
 	}
 

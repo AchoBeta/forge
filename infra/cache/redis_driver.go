@@ -45,7 +45,7 @@ func initRedis(config configs.IConfig) error {
 		TLSConfig:          nil,
 		Limiter:            nil,
 	})
-	if _, err := client.Ping(ctx).Result(); err != nil {
+	if _, err := client.Ping(context.Background()).Result(); err != nil {
 		zlog.Errorf("redis无法链接 %v", err)
 		return err
 	}
