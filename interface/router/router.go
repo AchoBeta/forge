@@ -46,6 +46,10 @@ func register() (router *gin.Engine) {
 	mindMapGroup := r.Group("mindmap", jwtAuthMiddleware)
 	loadMindMapService(mindMapGroup)
 
+	// cos路由组需要JWT鉴权
+	cosGroup := r.Group("cos", jwtAuthMiddleware)
+	loadCOSService(cosGroup)
+
 	return r
 }
 
@@ -97,4 +101,10 @@ func loadMindMapService(r *gin.RouterGroup) {
 	// 删除思维导图
 	// [DELETE] /api/biz/v1/mindmap/:id
 	r.Handle(DELETE, ":id", DeleteMindMap())
+}
+
+func loadCOSService(r *gin.RouterGroup) {
+	// 获取OSS临时凭证
+	// [POST] /api/biz/v1/cos/sts/credentials
+	r.Handle(POST, "sts/credentials", GetOSSCredentials())
 }

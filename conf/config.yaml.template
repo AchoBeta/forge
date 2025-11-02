@@ -23,3 +23,12 @@ jwt:         # jwt配置
 
 snowflake:   # 雪花ID配置
   node_id: 1  # 节点ID，范围0-1023，每个实例配置不同的值
+
+cos:        # 腾讯云COS配置
+  secret_id: your-secret-id
+  secret_key: your-secret-key
+  region: ap-guangzhou
+  bucket: your-bucket-name
+  app_id: your-app-id
+  base_url: https://your-bucket-name.cos.ap-guangzhou.myqcloud.com
+  sts_duration: 3600  # STS凭证有效期（秒），默认3600，范围60-3600

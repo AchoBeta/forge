@@ -3,10 +3,12 @@ package initalize
 import (
 	_ "embed"
 	"fmt"
+	"forge/biz/cosservice"
 	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
 	"forge/infra/cache"
 	"forge/infra/configs"
+	"forge/infra/cos"
 	"forge/infra/coze"
 	"forge/infra/database"
 	"forge/infra/storage"
@@ -30,6 +32,7 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
+	cos.InitCOSService()
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 
@@ -46,7 +49,8 @@ func Init() {
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
-	handler.MustInitHandler(us, mms)
+	cs := cosservice.NewCOSServiceImpl(cos.GetCOSService())
+	handler.MustInitHandler(us, mms, cs)
 
 	// 初始化JWT鉴权中间件
 	router.InitJWTAuth(us)
