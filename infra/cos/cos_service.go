@@ -34,7 +34,7 @@ func NewCOSService(cfg configs.COSConfig) adapter.COSService {
 
 // GetTemporaryCredentials 获取COS临时凭证
 func (c *cosServiceImpl) GetTemporaryCredentials(resourcePath string, durationSeconds int64) (*sts.CredentialResult, error) {
-	// 构建资源ARN
+	// 构建对象级别的资源ARN（用于具体对象的操作）
 	resourceArn := fmt.Sprintf(
 		"qcs::cos:%s:uid/%s:%s-%s/%s",
 		c.config.Region,
@@ -44,22 +44,32 @@ func (c *cosServiceImpl) GetTemporaryCredentials(resourcePath string, durationSe
 		resourcePath,
 	)
 
+	// 构建存储桶级别的资源ARN（用于存储桶级别的操作，如 ListMultipartUploads）
+	bucketArn := fmt.Sprintf(
+		"qcs::cos:%s:uid/%s:%s-%s/",
+		c.config.Region,
+		c.config.AppID,
+		c.config.Bucket,
+		c.config.AppID,
+	)
+
 	// 配置STS策略
+	// 注意：ListMultipartUploads 需要存储桶级别权限，必须单独授权到存储桶ARN
 	opt := &sts.CredentialOptions{
 		DurationSeconds: durationSeconds,
 		Region:          c.config.Region,
 		Policy: &sts.CredentialPolicy{
 			Statement: []sts.CredentialPolicyStatement{
 				{
+					// Statement 1: 对象级别的操作（文件上传、下载、分片上传等）
 					Action: []string{
 						// 简单上传操作
 						"name/cos:PostObject",
 						"name/cos:PutObject",
 						"name/cos:GetObject",
 						"name/cos:HeadObject",
-						// 分片上传操作
+						// 分片上传操作（对象级别）
 						"name/cos:InitiateMultipartUpload",
-						"name/cos:ListMultipartUploads",
 						"name/cos:ListParts",
 						"name/cos:UploadPart",
 						"name/cos:CompleteMultipartUpload",
@@ -67,6 +77,16 @@ func (c *cosServiceImpl) GetTemporaryCredentials(resourcePath string, durationSe
 					Effect: "allow",
 					Resource: []string{
 						resourceArn,
+					},
+				},
+				{
+					// Statement 2: 存储桶级别的操作（列出所有分片上传任务）
+					Action: []string{
+						"name/cos:ListMultipartUploads",
+					},
+					Effect: "allow",
+					Resource: []string{
+						bucketArn,
 					},
 				},
 			},

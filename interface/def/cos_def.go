@@ -3,7 +3,7 @@ package def
 // GetOSSCredentialsReq 获取OSS凭证请求
 type GetOSSCredentialsReq struct {
 	ResourcePath    string `json:"resource_path" binding:"required"` // 资源路径，如 user/123/avatar/profile.jpg
-	DurationSeconds int64  `json:"duration_seconds"`                 // 有效期（秒），可选，默认3600，范围900-3600（最短15分钟，最长1小时）
+	DurationSeconds int64  `json:"duration_seconds"`                 // 有效期（秒），可选，默认3600，范围900-7200（最短15分钟，最长2小时）
 }
 
 // GetOSSCredentialsResp 获取OSS凭证响应

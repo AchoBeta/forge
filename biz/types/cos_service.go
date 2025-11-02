@@ -11,7 +11,7 @@ type ICOSService interface {
 // GetOSSCredentialsParams 获取OSS凭证参数
 type GetOSSCredentialsParams struct {
 	ResourcePath    string // 资源路径，如 user/123/avatar/profile.jpg
-	DurationSeconds int64  // 有效期（秒），范围60-3600
+	DurationSeconds int64  // 有效期（秒），范围900-7200（最短15分钟，最长2小时）
 }
 
 // OSSCredentials OSS凭证信息

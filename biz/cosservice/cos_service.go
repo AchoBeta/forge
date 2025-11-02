@@ -36,8 +36,7 @@ type COSServiceImpl struct {
 	config     configs.COSConfig
 }
 
-func NewCOSServiceImpl(cosService adapter.COSService) *COSServiceImpl {
-	cfg := configs.Config().GetCOSConfig()
+func NewCOSServiceImpl(cosService adapter.COSService, cfg configs.COSConfig) *COSServiceImpl {
 	return &COSServiceImpl{
 		cosService: cosService,
 		config:     cfg,

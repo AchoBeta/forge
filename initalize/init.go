@@ -52,7 +52,7 @@ func Init() {
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
-	cs := cosservice.NewCOSServiceImpl(cosService)
+	cs := cosservice.NewCOSServiceImpl(cosService, cosConfig)
 	handler.MustInitHandler(us, mms, cs)
 
 	// 初始化JWT鉴权中间件
