@@ -21,29 +21,34 @@ type IHandler interface {
 	ListMindMaps(ctx context.Context, req *def.ListMindMapsReq) (rsp *def.ListMindMapsResp, err error)
 	UpdateMindMap(ctx context.Context, mapID string, req *def.UpdateMindMapReq) (rsp *def.UpdateMindMapResp, err error)
 	DeleteMindMap(ctx context.Context, mapID string) (rsp *def.DeleteMindMapResp, err error)
+
+	// COS: OSS凭证相关接口
+	GetOSSCredentials(ctx context.Context, req *def.GetOSSCredentialsReq) (rsp *def.GetOSSCredentialsResp, err error)
 }
 
 var handler IHandler
 
 type Handler struct {
-	UserService     types.IUserService
-	MindMapService  types.IMindMapService
+	UserService    types.IUserService
+	MindMapService types.IMindMapService
+	COSService     types.ICOSService
 }
 
 func GetHandler() IHandler {
 	return handler
 }
-func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService) {
-	err := InitHandler(userService, mindMapService)
+func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService) {
+	err := InitHandler(userService, mindMapService, cosService)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func InitHandler(userService types.IUserService, mindMapService types.IMindMapService) error {
+func InitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService) error {
 	handler = &Handler{
 		UserService:    userService,
 		MindMapService: mindMapService,
+		COSService:     cosService,
 	}
 	return nil
 }

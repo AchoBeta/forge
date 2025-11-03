@@ -16,6 +16,7 @@ type IConfig interface {
 	GetLoggerConfig() LoggerConfig
 	GetJWTConfig() JWTConfig
 	GetSnowflakeConfig() SnowflakeConfig
+	GetCOSConfig() COSConfig
 }
 
 var (
@@ -27,7 +28,6 @@ func Config() IConfig {
 }
 func MustInit(path string) {
 	mustInit(path)
-	return
 }
 
 func (c *config) GetRedisConfig() RedisConfig {
@@ -55,6 +55,11 @@ func (c *config) GetJWTConfig() JWTConfig {
 // snowflake配置读取
 func (c *config) GetSnowflakeConfig() SnowflakeConfig {
 	return c.SnowflakeConfig
+}
+
+// cos配置读取
+func (c *config) GetCOSConfig() COSConfig {
+	return c.COSConfig
 }
 
 func mustInit(path string) *config {
@@ -103,6 +108,7 @@ type config struct {
 	RedisConfig     RedisConfig       `mapstructure:"redis"`
 	JWTConfig       JWTConfig         `mapstructure:"jwt"`
 	SnowflakeConfig SnowflakeConfig   `mapstructure:"snowflake"`
+	COSConfig       COSConfig         `mapstructure:"cos"`
 }
 
 type ApplicationConfig struct {
@@ -143,4 +149,14 @@ type JWTConfig struct {
 
 type SnowflakeConfig struct {
 	NodeID int64 `mapstructure:"node_id"`
+}
+
+type COSConfig struct {
+	SecretID    string `mapstructure:"secret_id"`
+	SecretKey   string `mapstructure:"secret_key"`
+	Region      string `mapstructure:"region"`
+	Bucket      string `mapstructure:"bucket"`
+	AppID       string `mapstructure:"app_id"`
+	BaseURL     string `mapstructure:"base_url"`
+	STSDuration int64  `mapstructure:"sts_duration"`
 }

@@ -14,6 +14,7 @@ require (
 	github.com/google/uuid v1.4.0
 	github.com/spf13/cast v1.6.0
 	github.com/spf13/viper v1.19.0
+  github.com/tencentyun/qcloud-cos-sts-sdk v0.0.0-20250515025012-e0eec8a5d123
 	github.com/unidoc/unioffice/v2 v2.5.0
 	github.com/unidoc/unipdf/v4 v4.4.0
 	go.uber.org/zap v1.27.0
