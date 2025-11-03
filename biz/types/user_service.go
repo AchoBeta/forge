@@ -43,8 +43,3 @@ const (
 	AccountTypePhone = "phone"
 	AccountTypeEmail = "email"
 )
-
-const (
-	PurposeRegister      = "register"       // 注册
-	PurposeResetPassword = "reset_password" // 重置密码
-)

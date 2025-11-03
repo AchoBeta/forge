@@ -33,7 +33,7 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
-	email.InitEmailService(configs.Config())
+	email.InitEmailService(configs.Config().GetSMTPConfig())
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 
@@ -49,7 +49,7 @@ func Init() {
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, email.GetEmailService())
-  
+
 	// 依赖注入：创建COS服务实例
 	cosConfig := configs.Config().GetCOSConfig()
 	cosService := cos.NewCOSService(cosConfig)

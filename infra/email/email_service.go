@@ -16,13 +16,13 @@ import (
 )
 
 type emailServiceImpl struct {
-	smtpConfig               configs.IConfig
+	smtpConfig               configs.SMTPConfig
 	verificationCodeTemplate *template.Template
 }
 
 var es *emailServiceImpl
 
-func InitEmailService(config configs.IConfig) {
+func InitEmailService(smtpConfig configs.SMTPConfig) {
 	// 加载验证码邮件模板
 	templatePath := filepath.Join(util.GetRootPath(""), "template", "email", "verification_code.html")
 	tmpl, err := template.ParseFiles(templatePath)
@@ -32,7 +32,7 @@ func InitEmailService(config configs.IConfig) {
 	}
 
 	es = &emailServiceImpl{
-		smtpConfig:               config,
+		smtpConfig:               smtpConfig,
 		verificationCodeTemplate: tmpl,
 	}
 	zlog.Infof("邮件服务初始化成功，模板路径: %s", templatePath)
@@ -44,11 +44,9 @@ func GetEmailService() adapter.EmailService {
 
 // SendVerificationCode 发送邮件 携带验证码
 func (e *emailServiceImpl) SendVerificationCode(ctx context.Context, email, code string) error {
-	smtpCfg := e.smtpConfig.GetSMTPConfig()
-
 	// 创建邮件消息
 	m := gomail.NewMessage()
-	m.SetHeader("From", m.FormatAddress(smtpCfg.SmtpUser, smtpCfg.EncodedName))
+	m.SetHeader("From", m.FormatAddress(e.smtpConfig.SmtpUser, e.smtpConfig.EncodedName))
 	m.SetHeader("To", email)
 	m.SetHeader("Subject", "您的验证码")
 
@@ -65,7 +63,7 @@ func (e *emailServiceImpl) SendVerificationCode(ctx context.Context, email, code
 	m.SetBody("text/html", emailBody.String())
 
 	// 创建邮件发送器
-	d := gomail.NewDialer(smtpCfg.SmtpHost, smtpCfg.SmtpPort, smtpCfg.SmtpUser, smtpCfg.SmtpPass)
+	d := gomail.NewDialer(e.smtpConfig.SmtpHost, e.smtpConfig.SmtpPort, e.smtpConfig.SmtpUser, e.smtpConfig.SmtpPass)
 
 	// 发送邮件
 	if err := d.DialAndSend(m); err != nil {

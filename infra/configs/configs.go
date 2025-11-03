@@ -61,6 +61,7 @@ func (c *config) GetSnowflakeConfig() SnowflakeConfig {
 // smtp配置读取
 func (c *config) GetSMTPConfig() SMTPConfig {
 	return c.SMTPConfig
+}
 
 // cos配置读取
 func (c *config) GetCOSConfig() COSConfig {
