@@ -131,12 +131,12 @@ func extractWord(fh *multipart.FileHeader) (string, error) {
 		return "", err
 	}
 
-	var allTest strings.Builder
+	var allText strings.Builder
 
-	// To extract the text and work with the formatted info in a simple fashion, you can use:
 	extracted := doc.ExtractText()
 	for _, e := range extracted.Items {
-		allTest.WriteString(e.Text)
+		allText.WriteString(e.Text)
+		allText.WriteString("\n")
 	}
 	return allTest.String(), nil
 }
