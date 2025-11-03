@@ -12,6 +12,7 @@ import (
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/biz/types"
+	"forge/constant"
 	"forge/infra/cache"
 	"forge/pkg/log/zlog"
 	"forge/util"
@@ -159,7 +160,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	}
 
 	// 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code, types.PurposeRegister); err != nil {
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return nil, err
 	}
 
@@ -268,7 +269,7 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 	}
 
 	// 4. 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code, types.PurposeResetPassword); err != nil {
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return err
 	}
 
@@ -331,9 +332,9 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 }
 
 // SendVerificationCode 发送验证码
-func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) error {
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType string) error {
 	// 参数校验
-	if account == "" || accountType == "" || purpose == "" {
+	if account == "" || accountType == "" {
 		zlog.CtxErrorf(ctx, "invalid params for send verification code")
 		return ErrInvalidParams
 	}
@@ -348,7 +349,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 	code := generateVerificationCode()
 
 	// 先将验证码存储到 Redis，并设置过期时间
-	key := fmt.Sprintf("verification_code:%s:%s", purpose, account)
+	key := fmt.Sprintf(constant.REDIS_VERIFICATION_CODE_KEY, account)
 	// TODO: 建议将过期时间（10分钟）配置化
 	expiration := 10 * time.Minute
 	if err := cache.SetRedis(ctx, key, code, expiration); err != nil {
@@ -356,7 +357,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 		return ErrInternalError
 	}
 	// 发送邮件
-	if err := u.emailService.SendVerificationCode(ctx, account, code, purpose); err != nil {
+	if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
 		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
 		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
 		if delErr := cache.DelRedis(ctx, key); delErr != nil {
@@ -369,13 +370,13 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 }
 
 // VerifyCode 校验验证码
-func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code, purpose string) error {
-	if account == "" || code == "" || purpose == "" {
+func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code string) error {
+	if account == "" || code == "" {
 		return ErrInvalidParams
 	}
 
 	// 从Redis获取验证码
-	key := fmt.Sprintf("verification_code:%s:%s", purpose, account)
+	key := fmt.Sprintf(constant.REDIS_VERIFICATION_CODE_KEY, account)
 	storedCode, err := cache.GetRedis(ctx, key)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "get verification code from redis failed: %v", err)

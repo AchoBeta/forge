@@ -8,7 +8,5 @@ type EmailService interface {
 	// SendVerificationCode 发送验证码到指定邮箱
 	// email: 目标邮箱地址
 	// code: 验证码
-	// purpose: 用途（register/reset_password等）
-	SendVerificationCode(ctx context.Context, email, code, purpose string) error
+	SendVerificationCode(ctx context.Context, email, code string) error
 }
-

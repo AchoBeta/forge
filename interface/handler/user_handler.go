@@ -84,7 +84,7 @@ func (h *Handler) ResetPassword(ctx context.Context, req *def.ResetPasswordReq) 
 
 func (h *Handler) SendCode(ctx context.Context, req *def.SendVerificationCodeReq) (rsp *def.SendVerificationCodeResp, err error) {
 	// 调用服务层发送验证码
-	err = h.UserService.SendVerificationCode(ctx, req.Account, req.AccountType, req.Purpose)
+	err = h.UserService.SendVerificationCode(ctx, req.Account, req.AccountType)
 	if err != nil {
 		return nil, err
 	}
