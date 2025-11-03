@@ -76,9 +76,13 @@ func loadUserService(r *gin.RouterGroup) {
 	// [POST] /api/biz/v1/user/register
 	r.Handle(POST, "register", Register())
 
+	// 发送验证码接口
+	// [POST] /api/biz/v1/user/send_code
+	r.Handle(POST, "send_code", SendCode())
+
 	// 重置密码接口
-	// [POST] /api/biz/v1/user/resetpassword
-	r.Handle(POST, "resetpassword", ResetPassword())
+	// [POST] /api/biz/v1/user/reset_password
+	r.Handle(POST, "reset_password", ResetPassword())
 }
 
 func loadMindMapService(r *gin.RouterGroup) {

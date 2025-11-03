@@ -57,6 +57,11 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 		return response.INTERNAL_ERROR
 	}
 
+	// 验证码错误
+	if errors.Is(err, userservice.ErrVerificationCodeIncorrect) {
+		return response.CAPTCHA_ERROR
+	}
+
 	// 密码强度校验错误
 	if errors.Is(err, util.ErrPasswordTooShort) {
 		return response.PARAM_NOT_VALID
@@ -145,6 +150,41 @@ func Register() gin.HandlerFunc {
 				Code:    msgCode.Code,
 				Message: msgCode.Msg,
 				Data:    def.RegisterResp{Success: false},
+			})
+			return
+		}
+		r.Success(rsp)
+	}
+}
+
+// SendCode
+//
+//	@Description:[POST] /api/biz/v1/user/send_code
+//	@return gin.HandlerFunc
+func SendCode() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		req := &def.SendVerificationCodeReq{}
+		// 统一从 gin 上下文取出 request 的 context
+		ctx := gCtx.Request.Context()
+		if err := gCtx.ShouldBindJSON(req); err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INVALID_PARAMS.Code,
+				Message: response.INVALID_PARAMS.Msg,
+				Data:    def.SendVerificationCodeResp{Success: false},
+			})
+			return
+		}
+
+		rsp, err := handler.GetHandler().SendCode(ctx, req)
+		r := response.NewResponse(gCtx)
+
+		if err != nil {
+			// 根据服务层返回的错误类型，返回给客户端更精确的错误信息
+			msgCode := mapServiceErrorToMsgCode(err)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.SendVerificationCodeResp{Success: false},
 			})
 			return
 		}

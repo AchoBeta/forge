@@ -2,11 +2,18 @@ package userservice
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
+	"fmt"
+	"math/big"
+	"time"
+
 	"forge/biz/adapter"
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/biz/types"
+	"forge/constant"
+	"forge/infra/cache"
 	"forge/pkg/log/zlog"
 	"forge/util"
 )
@@ -28,25 +35,30 @@ var (
 	ErrInternalError = errors.New("internal error")
 	// ErrPermissionDenied 表示权限被拒绝
 	ErrPermissionDenied = errors.New("permission denied")
+	// ErrVerificationCodeIncorrect 表示验证码错误
+	ErrVerificationCodeIncorrect = errors.New("verification code incorrect")
 )
 
 // 最好的设计方案：
 // infra的所有函数都是通过接口来用的
 
 type UserServiceImpl struct {
-	userRepo    repo.UserRepo
-	cozeService adapter.CozeService
-	jwtUtil     *util.JWTUtil
+	userRepo     repo.UserRepo
+	cozeService  adapter.CozeService
+	jwtUtil      *util.JWTUtil
+	emailService adapter.EmailService
 }
 
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
 	cozeService adapter.CozeService,
-	jwtUtil *util.JWTUtil) *UserServiceImpl {
+	jwtUtil *util.JWTUtil,
+	emailService adapter.EmailService) *UserServiceImpl {
 	return &UserServiceImpl{
-		userRepo:    userRepo,
-		cozeService: cozeService,
-		jwtUtil:     jwtUtil,
+		userRepo:     userRepo,
+		cozeService:  cozeService,
+		jwtUtil:      jwtUtil,
+		emailService: emailService,
 	}
 }
 
@@ -147,7 +159,10 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		return nil, ErrUserAlreadyExists
 	}
 
-	// 校验验证码 code（短信/邮箱） 占位
+	// 校验验证码 code（短信/邮箱）
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+		return nil, err
+	}
 
 	//------------------------------------------------
 
@@ -253,9 +268,10 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 		return err
 	}
 
-	// 4. 校验验证码 code（短信/邮箱），此处预留
-
-	// 验证码校验逻辑应该在这里实现
+	// 4. 校验验证码 code（短信/邮箱）
+	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+		return err
+	}
 
 	// 验证新密码强度
 	if err := util.ValidatePasswordStrength(req.NewPassword); err != nil {
@@ -313,4 +329,86 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 	}
 
 	return user, nil
+}
+
+// SendVerificationCode 发送验证码
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType string) error {
+	// 参数校验
+	if account == "" || accountType == "" {
+		zlog.CtxErrorf(ctx, "invalid params for send verification code")
+		return ErrInvalidParams
+	}
+
+	// 目前只支持邮箱验证码
+	if accountType != types.AccountTypeEmail {
+		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
+		return ErrUnsupportedAccountType
+	}
+
+	// 生成6位随机验证码
+	code := generateVerificationCode()
+
+	// 先将验证码存储到 Redis，并设置过期时间
+	key := fmt.Sprintf(constant.REDIS_VERIFICATION_CODE_KEY, account)
+	// TODO: 建议将过期时间（10分钟）配置化
+	expiration := 10 * time.Minute
+	if err := cache.SetRedis(ctx, key, code, expiration); err != nil {
+		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
+		return ErrInternalError
+	}
+	// 发送邮件
+	if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
+		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
+		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
+		if delErr := cache.DelRedis(ctx, key); delErr != nil {
+			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+		}
+		return ErrInternalError
+	}
+
+	return nil
+}
+
+// VerifyCode 校验验证码
+func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code string) error {
+	if account == "" || code == "" {
+		return ErrInvalidParams
+	}
+
+	// 从Redis获取验证码
+	key := fmt.Sprintf(constant.REDIS_VERIFICATION_CODE_KEY, account)
+	storedCode, err := cache.GetRedis(ctx, key)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "get verification code from redis failed: %v", err)
+		return ErrInternalError
+	}
+
+	if storedCode == "" {
+		zlog.CtxWarnf(ctx, "verification code not found or expired for: %s", account)
+		return ErrVerificationCodeIncorrect
+	}
+
+	if storedCode != code {
+		zlog.CtxWarnf(ctx, "verification code mismatch for: %s", account)
+		return ErrVerificationCodeIncorrect
+	}
+
+	// 校验成功后删除验证码（一次性使用）
+	if err := cache.DelRedis(ctx, key); err != nil {
+		zlog.CtxErrorf(ctx, "delete verification code from redis failed: %v", err)
+		// 不返回错误，因为验证码已经校验成功
+	}
+
+	return nil
+}
+
+// generateVerificationCode 生成6位随机验证码
+func generateVerificationCode() string {
+	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
+	if err != nil {
+		// crypto/rand 的失败是一个罕见且严重的事件，表明系统的熵源存在问题。
+		// 在这种情况下，记录严重错误并 panic 是一个合理的做法。
+		panic(fmt.Sprintf("failed to generate cryptographically secure random number for verification code: %v", err))
+	}
+	return fmt.Sprintf("%06d", n.Int64())
 }

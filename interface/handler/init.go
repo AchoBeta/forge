@@ -8,12 +8,12 @@ import (
 
 type IHandler interface {
 	Login(ctx context.Context, req *def.LoginReq) (rsp *def.LoginResp, err error)
-
 	// Register: 注册 暂无第三方
 	Register(ctx context.Context, req *def.RegisterReq) (rsp *def.RegisterResp, err error)
-
 	// ResetPassword: 重置密码
 	ResetPassword(ctx context.Context, req *def.ResetPasswordReq) (rsp *def.ResetPasswordResp, err error)
+	// SendCode: 发送验证码  ！邮件！
+	SendCode(ctx context.Context, req *def.SendVerificationCodeReq) (rsp *def.SendVerificationCodeResp, err error)
 
 	// MindMap: 思维导图相关接口
 	CreateMindMap(ctx context.Context, req *def.CreateMindMapReq) (rsp *def.CreateMindMapResp, err error)

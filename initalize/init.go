@@ -11,6 +11,7 @@ import (
 	"forge/infra/cos"
 	"forge/infra/coze"
 	"forge/infra/database"
+	"forge/infra/email"
 	"forge/infra/storage"
 	"forge/interface/handler"
 	"forge/interface/router"
@@ -32,6 +33,7 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
+	email.InitEmailService(configs.Config().GetSMTPConfig())
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 
@@ -46,11 +48,12 @@ func Init() {
 	jwtConfig := configs.Config().GetJWTConfig()
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
+	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, email.GetEmailService())
+
 	// 依赖注入：创建COS服务实例
 	cosConfig := configs.Config().GetCOSConfig()
 	cosService := cos.NewCOSService(cosConfig)
 
-	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil)
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
 	cs := cosservice.NewCOSServiceImpl(cosService, cosConfig)
 	handler.MustInitHandler(us, mms, cs)

@@ -16,6 +16,9 @@ type IUserService interface {
 
 	// GetUserByID 根据用户ID获取用户信息（用于JWT鉴权等场景）
 	GetUserByID(ctx context.Context, userID string) (*entity.User, error)
+
+	// SendVerificationCode 发送验证码
+	SendVerificationCode(ctx context.Context, account, accountType string) error
 }
 
 // 注册参数
