@@ -108,11 +108,9 @@ func extractPDF(fh *multipart.FileHeader) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		//拼接
-		textBuilder.WriteString("------------------------------\n")
-		textBuilder.WriteString(fmt.Sprintf("Page %d:\n", pageNum))
-		textBuilder.WriteString(fmt.Sprintf("\"%s\"\n", text))
-		textBuilder.WriteString("------------------------------")
+        //拼接
+		textBuilder.WriteString(text)
+		textBuilder.WriteString("\n")
 
 	}
 
