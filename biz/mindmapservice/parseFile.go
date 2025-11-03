@@ -2,6 +2,7 @@ package mindmapservice
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"forge/pkg/log/zlog"
 	"github.com/unidoc/unioffice/v2/document"
@@ -14,11 +15,28 @@ import (
 	"strings"
 )
 
+// 定义MIME类型常量（硬编码常量，避免魔法字符串）
+const (
+	mimeTypePDF  = "application/pdf"
+	mimeTypeDoc  = "application/msword"
+	mimeTypeDocx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+	mimeTypePPT  = "application/vnd.ms-powerpoint"
+	mimeTypePPTx = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+)
+
+// todo
+// 获取许可
+// license.SetMeteredKey
+// "github.com/unidoc/unioffice/v2/common/license"
 func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err error) {
-	mime := fileHeaderMime(fh)
+	mime, err := fileHeaderMime(fh)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		zlog.CtxErrorf(ctx, "failed to detect MIME type for file %v", err)
+		return "", err
+	}
 
 	switch mime {
-	case "application/pdf":
+	case mimeTypePDF:
 		// PDF 处理
 		text, err = extractPDF(fh)
 		if err != nil {
@@ -26,8 +44,7 @@ func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err 
 			return
 		}
 	case
-		"application/msword",                                                      // .doc
-		"application/vnd.openxmlformats-officedocument.wordprocessingml.document": // .docx
+		mimeTypeDoc, mimeTypeDocx: // .doc,  .docx
 		// Word 处理
 		text, err = extractWord(fh)
 		if err != nil {
@@ -35,8 +52,7 @@ func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err 
 			return
 		}
 	case
-		"application/vnd.ms-powerpoint",                                             // .ppt
-		"application/vnd.openxmlformats-officedocument.presentationml.presentation": // .pptx
+		mimeTypePPT, mimeTypePPTx: // .ppt, .pptx
 		// PPT 处理
 		text, err = extractPPT(fh)
 		if err != nil {
@@ -54,20 +70,20 @@ func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err 
 }
 
 // 返回形如 "image/jpeg"、"application/zip" 的 MIME 类型，出错时返回空串
-func fileHeaderMime(fh *multipart.FileHeader) string {
+func fileHeaderMime(fh *multipart.FileHeader) (string, error) {
 	rc, err := fh.Open()
 	if err != nil {
-		return ""
+		return "", err
 	}
 	defer rc.Close()
 
 	// 只取文件头 512 字节即可
 	buf := make([]byte, 512)
-	n, _ := io.ReadFull(rc, buf)
+	n, err := io.ReadFull(rc, buf)
 	if n == 0 {
-		return ""
+		return "", err
 	}
-	return http.DetectContentType(buf[:n])
+	return http.DetectContentType(buf[:n]), nil
 }
 
 func extractPDF(fh *multipart.FileHeader) (string, error) {
@@ -90,7 +106,6 @@ func extractPDF(fh *multipart.FileHeader) (string, error) {
 
 	var textBuilder strings.Builder
 
-	fmt.Printf("PDF to text extraction:\n")
 	for i := 0; i < numPages; i++ {
 		pageNum := i + 1
 
@@ -108,10 +123,9 @@ func extractPDF(fh *multipart.FileHeader) (string, error) {
 		if err != nil {
 			return "", err
 		}
-        //拼接
+		//拼接
 		textBuilder.WriteString(text)
 		textBuilder.WriteString("\n")
-
 	}
 
 	return textBuilder.String(), nil
@@ -134,9 +148,8 @@ func extractWord(fh *multipart.FileHeader) (string, error) {
 	extracted := doc.ExtractText()
 	for _, e := range extracted.Items {
 		allText.WriteString(e.Text)
-		allText.WriteString("\n")
 	}
-	return allTest.String(), nil
+	return allText.String(), nil
 }
 
 func extractPPT(fh *multipart.FileHeader) (string, error) {
