@@ -43,7 +43,13 @@ var (
 	INSUFFICENT_PERMISSIONS    = MsgCode{Code: 2200, Msg: "权限不足"}
 
 	/* 思维导图错误 3000 ~ 3999 */
-	MINDMAP_NOT_FOUND        = MsgCode{Code: 3001, Msg: "思维导图不存在"}
-	MINDMAP_ALREADY_EXISTS   = MsgCode{Code: 3002, Msg: "思维导图已存在"}
+	MINDMAP_NOT_FOUND         = MsgCode{Code: 3001, Msg: "思维导图不存在"}
+	MINDMAP_ALREADY_EXISTS    = MsgCode{Code: 3002, Msg: "思维导图已存在"}
 	MINDMAP_PERMISSION_DENIED = MsgCode{Code: 3003, Msg: "思维导图权限不足"}
+
+	/* COS错误 4000 ~ 4999 */
+	COS_INVALID_RESOURCE_PATH  = MsgCode{Code: 4001, Msg: "无效的资源路径"}
+	COS_INVALID_DURATION       = MsgCode{Code: 4002, Msg: "无效的有效期"}
+	COS_GET_CREDENTIALS_FAILED = MsgCode{Code: 4003, Msg: "获取COS凭证失败"}
+	COS_PERMISSION_DENIED      = MsgCode{Code: 4004, Msg: "COS权限不足"}
 )

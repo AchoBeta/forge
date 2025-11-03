@@ -17,6 +17,7 @@ type IConfig interface {
 	GetJWTConfig() JWTConfig
 	GetSnowflakeConfig() SnowflakeConfig
 	GetSMTPConfig() SMTPConfig // SMTP服务 发送邮件
+	GetCOSConfig() COSConfig
 }
 
 var (
@@ -28,7 +29,6 @@ func Config() IConfig {
 }
 func MustInit(path string) {
 	mustInit(path)
-	return
 }
 
 func (c *config) GetRedisConfig() RedisConfig {
@@ -61,6 +61,10 @@ func (c *config) GetSnowflakeConfig() SnowflakeConfig {
 // smtp配置读取
 func (c *config) GetSMTPConfig() SMTPConfig {
 	return c.SMTPConfig
+
+// cos配置读取
+func (c *config) GetCOSConfig() COSConfig {
+	return c.COSConfig
 }
 
 func mustInit(path string) *config {
@@ -110,6 +114,7 @@ type config struct {
 	JWTConfig       JWTConfig         `mapstructure:"jwt"`
 	SnowflakeConfig SnowflakeConfig   `mapstructure:"snowflake"`
 	SMTPConfig      SMTPConfig        `mapstructure:"smtp"`
+	COSConfig       COSConfig         `mapstructure:"cos"`
 }
 
 type ApplicationConfig struct {
@@ -159,4 +164,14 @@ type SMTPConfig struct {
 	SmtpUser    string `mapstructure:"smtp_user"`
 	SmtpPass    string `mapstructure:"smtp_pass"`
 	EncodedName string `mapstructure:"encoded_name"`
+}
+
+type COSConfig struct {
+	SecretID    string `mapstructure:"secret_id"`
+	SecretKey   string `mapstructure:"secret_key"`
+	Region      string `mapstructure:"region"`
+	Bucket      string `mapstructure:"bucket"`
+	AppID       string `mapstructure:"app_id"`
+	BaseURL     string `mapstructure:"base_url"`
+	STSDuration int64  `mapstructure:"sts_duration"`
 }

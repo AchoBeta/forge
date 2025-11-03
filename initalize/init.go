@@ -3,10 +3,12 @@ package initalize
 import (
 	_ "embed"
 	"fmt"
+	"forge/biz/cosservice"
 	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
 	"forge/infra/cache"
 	"forge/infra/configs"
+	"forge/infra/cos"
 	"forge/infra/coze"
 	"forge/infra/database"
 	"forge/infra/email"
@@ -47,8 +49,14 @@ func Init() {
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
 	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, email.GetEmailService())
+  
+	// 依赖注入：创建COS服务实例
+	cosConfig := configs.Config().GetCOSConfig()
+	cosService := cos.NewCOSService(cosConfig)
+
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
-	handler.MustInitHandler(us, mms)
+	cs := cosservice.NewCOSServiceImpl(cosService, cosConfig)
+	handler.MustInitHandler(us, mms, cs)
 
 	// 初始化JWT鉴权中间件
 	router.InitJWTAuth(us)
