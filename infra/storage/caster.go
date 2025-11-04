@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"forge/biz/entity"
 	"forge/infra/storage/po"
+	"gorm.io/datatypes"
 )
 
 // CastUserDO2PO
@@ -142,5 +143,45 @@ func CastConversationPO2DO(conversationPO *po.ConversationPO) (*entity.Conversat
 		CreatedAt:      conversationPO.CreatedAt,
 		UpdatedAt:      conversationPO.UpdatedAt,
 	}, nil
+
+}
+
+func CastConversationPOs2DOs(conversationPOs []po.ConversationPO) ([]*entity.Conversation, error) {
+	if conversationPOs == nil {
+		return nil, nil
+	}
+
+	var res []*entity.Conversation
+
+	for _, conversationPO := range conversationPOs {
+		conversation, err := CastConversationPO2DO(&conversationPO)
+		if err != nil {
+			return nil, err
+		}
+		res = append(res, conversation)
+	}
+	return res, nil
+}
+
+func CastConversationDO2PO(conversation *entity.Conversation) (*po.ConversationPO, error) {
+	if conversation == nil {
+		return nil, nil
+	}
+
+	jsonBytes, err := json.Marshal(conversation.Messages)
+	if err != nil {
+		return nil, fmt.Errorf("json序列化失败: %w", err)
+	}
+
+	conversationPO := &po.ConversationPO{
+		ConversationID: conversation.ConversationID,
+		UserID:         conversation.UserID,
+		MapID:          conversation.MapID,
+		Title:          conversation.Title,
+		Messages:       datatypes.JSON(jsonBytes),
+		CreatedAt:      conversation.CreatedAt,
+		UpdatedAt:      conversation.UpdatedAt,
+	}
+	return conversationPO, nil
 
 }

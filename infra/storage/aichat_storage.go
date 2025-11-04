@@ -28,35 +28,89 @@ func InitAiChatStorage() {
 
 func GetAiChatPersistence() repo.AiChatRepo { return cp }
 
-func (a aiChatPersistence) GetConversation(ctx context.Context, conversationID, userID string) (*entity.Conversation, error) {
+func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID, userID string) (*entity.Conversation, error) {
 	if conversationID == "" || userID == "" {
 		return nil, fmt.Errorf("会话ID和用户ID不能为空")
 	}
 
 	var conversationPO po.ConversationPO
 	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).First(&conversationPO).Error; err != nil {
-		return nil, fmt.Errorf("该会话不存在")
+		return nil, fmt.Errorf("该会话不存在 %w", err)
 	}
 
 	return CastConversationPO2DO(&conversationPO)
 }
 
-func (a aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, userID string) ([]*entity.Conversation, error) {
-	//TODO implement me
-	panic("implement me")
+func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, userID string) ([]*entity.Conversation, error) {
+	if mapID == "" || userID == "" {
+		return nil, fmt.Errorf("导图ID和用户ID不能为空")
+	}
+	var conversationPOs []po.ConversationPO
+	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("map_id = ? AND user_id = ?", mapID, userID).Find(&conversationPOs).Error; err != nil {
+		return nil, fmt.Errorf("获取导图会话时 数据库出错 %w", err)
+	}
+
+	return CastConversationPOs2DOs(conversationPOs)
 }
 
-func (a aiChatPersistence) SaveConversation(ctx context.Context, conversation *entity.Conversation) error {
-	//TODO implement me
-	panic("implement me")
+func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *entity.Conversation) error {
+	if conversation.ConversationID == "" || conversation.Title == "" || conversation.MapID == "" {
+		return fmt.Errorf("会话ID不能为空")
+	} else if conversation.UserID == "" {
+		return fmt.Errorf("用户ID不能为空")
+	} else if conversation.MapID == "" {
+		return fmt.Errorf("导图ID不能为空")
+	} else if conversation.Title == "" {
+		return fmt.Errorf("会话标题不能为空")
+	}
+
+	conversationPO, err := CastConversationDO2PO(conversation)
+	if err != nil {
+		return err
+	}
+	err = a.db.WithContext(ctx).Model(&po.ConversationPO{}).Create(&conversationPO).Error
+	if err != nil {
+		return fmt.Errorf("保存会话时，数据库出错 %w", err)
+	}
+	return nil
 }
 
-func (a aiChatPersistence) UpdateConversation(ctx context.Context, conversation *entity.Conversation) error {
-	//TODO implement me
-	panic("implement me")
+func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation *entity.Conversation) error {
+	if conversation.UserID == "" || conversation.MapID == "" {
+		return fmt.Errorf("用户ID和导图ID不能为空")
+	}
+
+	conversationPO, err := CastConversationDO2PO(conversation)
+	if err != nil {
+		return err
+	}
+
+	Updates := make(map[string]interface{})
+	if conversationPO.Title != "" {
+		Updates["title"] = conversation.Title
+	}
+	if conversationPO.Messages != nil {
+		Updates["messages"] = conversationPO.Messages
+	}
+
+	err = a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationPO.ConversationID, conversationPO.UserID).Updates(Updates).Error
+	if err != nil {
+		return fmt.Errorf("更新会话时 数据库出错 %w", err)
+	}
+	return nil
 }
 
-func (a aiChatPersistence) DeleteConversation(ctx context.Context, conversationID, userID string) error {
-	//TODO implement me
-	panic("implement me")
+func (a *aiChatPersistence) DeleteConversation(ctx context.Context, conversationID, userID string) error {
+	if conversationID == "" || userID == "" {
+		return fmt.Errorf("会话ID和用户ID不能为空")
+	}
+
+	result := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).Delete(&po.ConversationPO{})
+	if result.RowsAffected == 0 {
+		return fmt.Errorf("找不到该会话")
+	}
+	if result.Error != nil {
+		return fmt.Errorf("删除会话时出错 %w", result.Error)
+	}
+	return nil
 }
