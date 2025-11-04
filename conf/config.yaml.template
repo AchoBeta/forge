@@ -39,3 +39,5 @@ cos:        # 腾讯云COS配置
   app_id: your-app-id
   base_url: https://your-bucket-name.cos.ap-guangzhou.myqcloud.com
   sts_duration: 3600
+
+
