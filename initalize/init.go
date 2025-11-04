@@ -3,6 +3,7 @@ package initalize
 import (
 	_ "embed"
 	"fmt"
+	"forge/biz/aichatservice"
 	"forge/biz/cosservice"
 	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
@@ -11,6 +12,7 @@ import (
 	"forge/infra/cos"
 	"forge/infra/coze"
 	"forge/infra/database"
+	"forge/infra/eino"
 	"forge/infra/email"
 	"forge/infra/storage"
 	"forge/interface/handler"
@@ -56,7 +58,11 @@ func Init() {
 
 	mms := mindmapservice.NewMindMapServiceImpl(storage.GetMindMapPersistence())
 	cs := cosservice.NewCOSServiceImpl(cosService, cosConfig)
-	handler.MustInitHandler(us, mms, cs)
+
+	// 依赖注入: 创建ai服务实例
+	aiConfig := configs.Config().GetAiChatConfig()
+	acs := aichatservice.NewAiChatService(storage.GetAiChatPersistence(), eino.NewAiChatClient(aiConfig.ApiKey, aiConfig.ModelName))
+	handler.MustInitHandler(us, mms, cs, acs)
 
 	// 初始化JWT鉴权中间件
 	router.InitJWTAuth(us)

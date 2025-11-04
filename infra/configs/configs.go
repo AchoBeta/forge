@@ -18,6 +18,7 @@ type IConfig interface {
 	GetSnowflakeConfig() SnowflakeConfig
 	GetSMTPConfig() SMTPConfig // SMTP服务 发送邮件
 	GetCOSConfig() COSConfig
+	GetAiChatConfig() AiChatConfig
 }
 
 var (
@@ -68,6 +69,9 @@ func (c *config) GetCOSConfig() COSConfig {
 	return c.COSConfig
 }
 
+// ai模型配置读取
+func (c *config) GetAiChatConfig() AiChatConfig { return c.AiChatConfig }
+
 func mustInit(path string) *config {
 	// 初始化时间为东八区的时间
 	var cstZone = time.FixedZone("CST", 8*3600) // 东八
@@ -116,6 +120,7 @@ type config struct {
 	SnowflakeConfig SnowflakeConfig   `mapstructure:"snowflake"`
 	SMTPConfig      SMTPConfig        `mapstructure:"smtp"`
 	COSConfig       COSConfig         `mapstructure:"cos"`
+	AiChatConfig    AiChatConfig      `mapstructure:"ai_client"`
 }
 
 type ApplicationConfig struct {
@@ -175,4 +180,9 @@ type COSConfig struct {
 	AppID       string `mapstructure:"app_id"`
 	BaseURL     string `mapstructure:"base_url"`
 	STSDuration int64  `mapstructure:"sts_duration"`
+}
+
+type AiChatConfig struct {
+	ApiKey    string `mapstructure:"api_key"`
+	ModelName string `mapstructure:"model_name"`
 }
