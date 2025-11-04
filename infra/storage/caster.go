@@ -122,3 +122,25 @@ func CastMindMapPO2DO(mindmapPO *po.MindMapPO) (*entity.MindMap, error) {
 
 	return mindmap, nil
 }
+
+func CastConversationPO2DO(conversationPO *po.ConversationPO) (*entity.Conversation, error) {
+	if conversationPO == nil {
+		return nil, nil
+	}
+
+	var messages []*entity.Message
+	if err := json.Unmarshal(conversationPO.Messages, &messages); err != nil {
+		return nil, fmt.Errorf("反序列化失败: %w", err)
+	}
+
+	return &entity.Conversation{
+		ConversationID: conversationPO.ConversationID,
+		UserID:         conversationPO.UserID,
+		MapID:          conversationPO.MapID,
+		Title:          conversationPO.Title,
+		Messages:       messages,
+		CreatedAt:      conversationPO.CreatedAt,
+		UpdatedAt:      conversationPO.UpdatedAt,
+	}, nil
+
+}

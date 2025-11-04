@@ -17,8 +17,8 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 	return &AiChatClient{ApiKey: apiKey, ModelName: modelName}
 }
 
-func (c *AiChatClient) SendMessage(messages []*entity.Message) (string, error) {
-	ctx := context.Background()
+func (c *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Message) (string, error) {
+
 	aiChatModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
 		APIKey: c.ApiKey,
 		Model:  c.ModelName,

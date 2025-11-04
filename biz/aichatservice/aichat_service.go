@@ -15,7 +15,7 @@ func NewAiChatService(aiChatRepo repo.AiChatRepo, einoServer repo.EinoServer) *A
 }
 
 func (a *AiChatService) ProcessUserMessage(ctx context.Context, conversationID, userID, message string) (string, error) {
-	conversation, err := a.aiChatRepo.GetConversation(conversationID, userID)
+	conversation, err := a.aiChatRepo.GetConversation(ctx, conversationID, userID)
 	if err != nil {
 		return "", err
 	}
@@ -24,7 +24,7 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, conversationID, 
 	conversation.AddMessage(message, "user")
 
 	//调用ai 返回ai消息
-	aiMsg, err := a.einoServer.SendMessage(conversation.Messages)
+	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages)
 	if err != nil {
 		return "", err
 	}
@@ -33,7 +33,7 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, conversationID, 
 	conversation.AddMessage(aiMsg, "assistant")
 
 	//更新会话
-	err = a.aiChatRepo.UpdateConversation(conversation)
+	err = a.aiChatRepo.UpdateConversation(ctx, conversation)
 	if err != nil {
 		return "", err
 	}

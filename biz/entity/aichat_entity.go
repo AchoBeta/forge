@@ -12,7 +12,7 @@ type Message struct {
 }
 
 type Conversation struct {
-	conversationID string
+	ConversationID string
 	UserID         string
 	MapID          string
 	Title          string
@@ -28,7 +28,7 @@ func NewConversation(userID, mapID, title string) (*Conversation, error) {
 	}
 
 	return &Conversation{
-		conversationID: newID,
+		ConversationID: newID,
 		UserID:         userID,
 		MapID:          mapID,
 		Title:          title,
