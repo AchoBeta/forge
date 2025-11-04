@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"forge/biz/entity"
 	"forge/biz/repo"
@@ -29,21 +30,29 @@ func InitAiChatStorage() {
 func GetAiChatPersistence() repo.AiChatRepo { return cp }
 
 func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID, userID string) (*entity.Conversation, error) {
-	if conversationID == "" || userID == "" {
-		return nil, fmt.Errorf("会话ID和用户ID不能为空")
+	if conversationID == "" {
+		return nil, fmt.Errorf("会话ID不能为空")
+	} else if userID == "" {
+		return nil, fmt.Errorf("用户ID不能为空")
 	}
 
 	var conversationPO po.ConversationPO
 	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).First(&conversationPO).Error; err != nil {
-		return nil, fmt.Errorf("该会话不存在 %w", err)
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("该会话不存在")
+		}
+		return nil, fmt.Errorf("数据库出错 :%v", err)
+
 	}
 
 	return CastConversationPO2DO(&conversationPO)
 }
 
 func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, userID string) ([]*entity.Conversation, error) {
-	if mapID == "" || userID == "" {
-		return nil, fmt.Errorf("导图ID和用户ID不能为空")
+	if mapID == "" {
+		return nil, fmt.Errorf("导图ID不能为空")
+	} else if userID == "" {
+		return nil, fmt.Errorf("用户ID不能为空")
 	}
 	var conversationPOs []po.ConversationPO
 	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("map_id = ? AND user_id = ?", mapID, userID).Find(&conversationPOs).Error; err != nil {
@@ -76,8 +85,10 @@ func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *
 }
 
 func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation *entity.Conversation) error {
-	if conversation.UserID == "" || conversation.MapID == "" {
-		return fmt.Errorf("用户ID和导图ID不能为空")
+	if conversation.UserID == "" {
+		return fmt.Errorf("用户ID不能为空")
+	} else if conversation.MapID == "" {
+		return fmt.Errorf("导图ID不能为空")
 	}
 
 	conversationPO, err := CastConversationDO2PO(conversation)
@@ -101,13 +112,15 @@ func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation
 }
 
 func (a *aiChatPersistence) DeleteConversation(ctx context.Context, conversationID, userID string) error {
-	if conversationID == "" || userID == "" {
-		return fmt.Errorf("会话ID和用户ID不能为空")
+	if conversationID == "" {
+		return fmt.Errorf("会话ID不能为空")
+	} else if userID == "" {
+		return fmt.Errorf("用户ID不能为空")
 	}
 
 	result := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).Delete(&po.ConversationPO{})
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("找不到该会话")
+		return fmt.Errorf("该会话不存在")
 	}
 	if result.Error != nil {
 		return fmt.Errorf("删除会话时出错 %w", result.Error)

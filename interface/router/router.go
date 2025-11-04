@@ -50,6 +50,9 @@ func register() (router *gin.Engine) {
 	cosGroup := r.Group("cos", jwtAuthMiddleware)
 	loadCOSService(cosGroup)
 
+	aiChat := r.Group("aichat", jwtAuthMiddleware)
+	loadAiChat(aiChat)
+
 	return r
 }
 
@@ -111,4 +114,22 @@ func loadCOSService(r *gin.RouterGroup) {
 	// 获取OSS临时凭证
 	// [POST] /api/biz/v1/cos/sts/credentials
 	r.Handle(POST, "sts/credentials", GetOSSCredentials())
+}
+
+func loadAiChat(r *gin.RouterGroup) {
+	// 基础ai对话
+	// [POST] /api/biz/v1/aichat/send_message
+	r.Handle(POST, "send_message", SendMessage())
+
+	//新增会话
+	// [POST] /api/biz/v1/aichat/save_conversation
+	r.Handle(POST, "save_conversation", SaveNewConversation())
+
+	//获取该导图的所有会话
+	// [GET] /api/biz/v1/aichat/get_conversation_list
+	r.Handle(GET, "get_conversation_list", GetConversationList())
+
+	//删除会话
+	// [POST] /api/biz/v1/aichat/del_conversation
+	r.Handle(POST, "del_conversation", DelConversation())
 }
