@@ -22,7 +22,7 @@ func InitAiChatStorage() {
 	db := database.ForgeDB()
 
 	if err := db.AutoMigrate(&po.ConversationPO{}); err != nil {
-		panic(fmt.Sprintf("自动建表失败 :%v", err))
+		panic(fmt.Sprintf("自动建表失败 :%w", err))
 	}
 
 	cp = &aiChatPersistence{db: db}
@@ -42,7 +42,7 @@ func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID,
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, aichatservice.CONVERSATION_NOT_EXIST
 		}
-		return nil, fmt.Errorf("数据库出错 :%v", err)
+		return nil, fmt.Errorf("数据库出错 :%w", err)
 
 	}
 
@@ -130,7 +130,7 @@ func (a *aiChatPersistence) UpdateConversationTitle(ctx context.Context, convers
 		return err
 	}
 	Updates := make(map[string]interface{})
-	if conversationPO.Messages != nil {
+	if conversationPO.Title == "" {
 		Updates["title"] = conversationPO.Title
 	}
 
