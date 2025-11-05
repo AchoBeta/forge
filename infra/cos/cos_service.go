@@ -8,6 +8,7 @@ import (
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
 	"net/http"
+	"net/url"
 
 	"github.com/tencentyun/cos-go-sdk-v5"
 	sts "github.com/tencentyun/qcloud-cos-sts-sdk/go"
@@ -29,8 +30,12 @@ func NewCOSService(cfg configs.COSConfig) adapter.COSService {
 	)
 
 	// 创建COS上传客户端
-	u := fmt.Sprintf("https://%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.Region)
-	cosClient := cos.NewClient(&cos.BaseURL{BucketURL: u}, &http.Client{
+	bucketURL, err := url.Parse(fmt.Sprintf("https://%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.Region))
+	if err != nil {
+		zlog.Errorf("invalid bucket URL: %v", err)
+		panic(fmt.Sprintf("invalid bucket URL: %v", err))
+	}
+	cosClient := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, &http.Client{
 		Transport: &cos.AuthorizationTransport{
 			SecretID:  cfg.SecretID,
 			SecretKey: cfg.SecretKey,
@@ -132,8 +137,12 @@ func (c *cosServiceImpl) UploadFile(ctx context.Context, resourcePath string, fi
 		return "", fmt.Errorf("failed to upload file to COS: %w", err)
 	}
 
-	// 构建完整URL
-	fullURL := fmt.Sprintf("%s/%s", c.config.BaseURL, resourcePath)
+	// 构建完整URL（使用url.JoinPath正确处理URL拼接，避免双斜杠问题）
+	fullURL, err := url.JoinPath(c.config.BaseURL, resourcePath)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to construct file URL: %v", err)
+		return "", fmt.Errorf("failed to construct file URL: %w", err)
+	}
 
 	zlog.CtxInfof(ctx, "file uploaded successfully to COS, path: %s", resourcePath)
 	return fullURL, nil

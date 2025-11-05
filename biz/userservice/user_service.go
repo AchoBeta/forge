@@ -545,8 +545,11 @@ func validateAvatarURL(ctx context.Context, avatarURL string) error {
 	// 检查路径中的文件扩展名
 	hasValidExtension := false
 	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
-	// 允许的图片格式（不带点，用于查询参数）
-	validImageFormats := []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}
+	// 允许的图片格式（不带点，用于查询参数）- 从allowedExtensions自动生成，避免重复维护
+	validImageFormats := make([]string, len(allowedExtensions))
+	for i, ext := range allowedExtensions {
+		validImageFormats[i] = strings.TrimPrefix(ext, ".")
+	}
 
 	if fileName != "" {
 		// 使用 path.Ext 提取真正的文件扩展名，避免被恶意文件名绕过（如 avatar.jpg.exe）

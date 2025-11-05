@@ -16,6 +16,7 @@ import (
 	"forge/biz/types"
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
+	"forge/util"
 )
 
 const (
@@ -167,8 +168,13 @@ func (s *COSServiceImpl) UploadAvatar(ctx context.Context, userID string, fileDa
 	}
 
 	// 生成唯一文件名（避免覆盖）
-	timestamp := time.Now().Unix()
-	uniqueFilename := fmt.Sprintf("%d_%s", timestamp, sanitizedFilename)
+	// 使用雪花ID保证唯一性，同时包含时间信息
+	avatarID, err := util.GenerateStringID()
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to generate avatar ID: %v", err)
+		return "", ErrInternalError
+	}
+	uniqueFilename := fmt.Sprintf("%s_%s", avatarID, sanitizedFilename)
 
 	// 构建存储路径（使用path.Join防止路径注入）
 	resourcePath := path.Join("user", userID, "avatar", uniqueFilename)
