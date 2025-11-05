@@ -50,11 +50,17 @@ func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID,
 }
 
 func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, userID string) ([]*entity.Conversation, error) {
+
 	if mapID == "" {
 		return nil, aichatservice.MAP_ID_NOT_NULL
 	} else if userID == "" {
 		return nil, aichatservice.USER_ID_NOT_NULL
-	} else if !checkMapIsExist(ctx, a, mapID) {
+	}
+
+	check, err := checkMapIsExist(ctx, a, mapID)
+	if err != nil {
+		return nil, err
+	} else if !check {
 		return nil, aichatservice.MIND_MAP_NOT_EXIST
 	}
 
@@ -67,6 +73,7 @@ func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, us
 }
 
 func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *entity.Conversation) error {
+
 	if conversation.ConversationID == "" {
 		return aichatservice.CONVERSATION_ID_NOT_NULL
 	} else if conversation.UserID == "" {
@@ -75,7 +82,12 @@ func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *
 		return aichatservice.MAP_ID_NOT_NULL
 	} else if conversation.Title == "" {
 		return aichatservice.CONVERSATION_TITLE_NOT_NULL
-	} else if !checkMapIsExist(ctx, a, conversation.MapID) {
+	}
+
+	check, err := checkMapIsExist(ctx, a, conversation.MapID)
+	if err != nil {
+		return err
+	} else if !check {
 		return aichatservice.MIND_MAP_NOT_EXIST
 	}
 
@@ -91,11 +103,17 @@ func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *
 }
 
 func (a *aiChatPersistence) UpdateConversationMessage(ctx context.Context, conversation *entity.Conversation) error {
+
 	if conversation.UserID == "" {
 		return aichatservice.USER_ID_NOT_NULL
 	} else if conversation.MapID == "" {
 		return aichatservice.MAP_ID_NOT_NULL
-	} else if !checkConversationIsExist(ctx, a, conversation.ConversationID) {
+	}
+
+	check, err := checkConversationIsExist(ctx, a, conversation.ConversationID)
+	if err != nil {
+		return err
+	} else if !check {
 		return aichatservice.CONVERSATION_NOT_EXIST
 	}
 
@@ -117,11 +135,18 @@ func (a *aiChatPersistence) UpdateConversationMessage(ctx context.Context, conve
 }
 
 func (a *aiChatPersistence) UpdateConversationTitle(ctx context.Context, conversation *entity.Conversation) error {
+
 	if conversation.UserID == "" {
 		return aichatservice.USER_ID_NOT_NULL
 	} else if conversation.MapID == "" {
 		return aichatservice.MAP_ID_NOT_NULL
-	} else if !checkConversationIsExist(ctx, a, conversation.ConversationID) {
+	}
+
+	check, err := checkConversationIsExist(ctx, a, conversation.ConversationID)
+
+	if err != nil {
+		return err
+	} else if !check {
 		return aichatservice.CONVERSATION_NOT_EXIST
 	}
 
@@ -130,7 +155,7 @@ func (a *aiChatPersistence) UpdateConversationTitle(ctx context.Context, convers
 		return err
 	}
 	Updates := make(map[string]interface{})
-	if conversationPO.Title == "" {
+	if conversationPO.Title != "" {
 		Updates["title"] = conversationPO.Title
 	}
 
@@ -158,14 +183,26 @@ func (a *aiChatPersistence) DeleteConversation(ctx context.Context, conversation
 	return nil
 }
 
-func checkMapIsExist(ctx context.Context, a *aiChatPersistence, checkMapID string) bool {
-	var check bool
-	a.db.WithContext(ctx).Model(&po.MindMapPO{}).Raw("SELECT EXISTS(SELECT 1 FROM achobeta_forge_mindmap WHERE map_id = ?)", checkMapID).Scan(&check)
-	return check
+func checkMapIsExist(ctx context.Context, a *aiChatPersistence, checkMapID string) (bool, error) {
+	var id uint64
+	err := a.db.WithContext(ctx).Model(&po.MindMapPO{}).Select("id").Where("map_id = ?", checkMapID).Take(&id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("查询失败 数据库错误 %w", err)
+	} else {
+		return true, nil
+	}
 }
 
-func checkConversationIsExist(ctx context.Context, a *aiChatPersistence, checkConversationID string) bool {
-	var check bool
-	a.db.WithContext(ctx).Model(&po.ConversationPO{}).Raw("SELECT EXISTS(SELECT 1 FROM achobeta_forge_conversation WHERE conversation_id = ?)", checkConversationID).Scan(&check)
-	return check
+func checkConversationIsExist(ctx context.Context, a *aiChatPersistence, checkConversationID string) (bool, error) {
+	var id uint64
+	err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Select("id").Where("conversation_id = ?", checkConversationID).Take(&id).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return false, nil
+	} else if err != nil {
+		return false, fmt.Errorf("查询失败 数据库错误 %w", err)
+	} else {
+		return true, nil
+	}
 }
