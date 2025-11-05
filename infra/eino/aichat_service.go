@@ -26,7 +26,7 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 		panic(fmt.Errorf("ai模型连接失败: %v", err))
 	}
 
-	return &AiChatClient{ApiKey: apiKey, ModelName: modelName}
+	return &AiChatClient{ApiKey: apiKey, ModelName: modelName, Client: aiChatModel}
 }
 
 func (c *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Message) (string, error) {
