@@ -165,6 +165,7 @@ func DelConversation() gin.HandlerFunc {
 				Message: response.PARAM_NOT_COMPLETE.Msg,
 				Data:    def.DelConversationResponse{Success: false},
 			})
+			return
 		}
 
 		resp, err := handler.GetHandler().DelConversation(ctx, &req)
@@ -181,13 +182,14 @@ func DelConversation() gin.HandlerFunc {
 				Message: msgCode.Msg,
 				Data:    def.DelConversationResponse{Success: false},
 			})
+			return
 		} else {
 			r.Success(resp)
 		}
 	}
 }
 
-// 获取某个会话的详细信息
+// GetConversation 获取某个会话的详细信息
 func GetConversation() gin.HandlerFunc {
 	return func(gCtx *gin.Context) {
 		var req def.GetConversationRequest
@@ -201,6 +203,7 @@ func GetConversation() gin.HandlerFunc {
 				Message: response.PARAM_NOT_COMPLETE.Msg,
 				Data:    def.GetConversationResponse{Success: false},
 			})
+			return
 		}
 
 		resp, err := handler.GetHandler().GetConversation(ctx, &req)
@@ -217,6 +220,42 @@ func GetConversation() gin.HandlerFunc {
 				Message: msgCode.Msg,
 				Data:    def.GetConversationResponse{Success: false},
 			})
+			return
+		} else {
+			r.Success(resp)
+		}
+	}
+}
+
+func UpdateConversationTitle() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		var req def.UpdateConversationTitleRequest
+		ctx := gCtx.Request.Context()
+
+		if err := gCtx.ShouldBindJSON(&req); err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.PARAM_NOT_COMPLETE.Code,
+				Message: response.PARAM_NOT_COMPLETE.Msg,
+				Data:    def.UpdateConversationTitleResponse{Success: false},
+			})
+			return
+		}
+
+		resp, err := handler.GetHandler().UpdateConversationTitle(ctx, &req)
+		zlog.CtxAllInOne(ctx, "update_conversation_title", map[string]interface{}{"req": req}, resp, err)
+
+		r := response.NewResponse(gCtx)
+		if err != nil {
+			msgCode := aiChatServiceErrorToMsgCode(err)
+			if msgCode == response.COMMON_FAIL {
+				msgCode.Msg = err.Error()
+			}
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.UpdateConversationTitleResponse{Success: false},
+			})
+			return
 		} else {
 			r.Success(resp)
 		}

@@ -67,7 +67,7 @@ func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, us
 }
 
 func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *entity.Conversation) error {
-	if conversation.ConversationID == "" || conversation.Title == "" || conversation.MapID == "" {
+	if conversation.ConversationID == "" {
 		return aichatservice.CONVERSATION_ID_NOT_NULL
 	} else if conversation.UserID == "" {
 		return aichatservice.USER_ID_NOT_NULL
@@ -90,7 +90,7 @@ func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *
 	return nil
 }
 
-func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation *entity.Conversation) error {
+func (a *aiChatPersistence) UpdateConversationMessage(ctx context.Context, conversation *entity.Conversation) error {
 	if conversation.UserID == "" {
 		return aichatservice.USER_ID_NOT_NULL
 	} else if conversation.MapID == "" {
@@ -105,11 +105,33 @@ func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation
 	}
 
 	Updates := make(map[string]interface{})
-	if conversationPO.Title != "" {
-		Updates["title"] = conversation.Title
-	}
 	if conversationPO.Messages != nil {
 		Updates["messages"] = conversationPO.Messages
+	}
+
+	err = a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationPO.ConversationID, conversationPO.UserID).Updates(Updates).Error
+	if err != nil {
+		return fmt.Errorf("更新会话时 数据库出错 %w", err)
+	}
+	return nil
+}
+
+func (a *aiChatPersistence) UpdateConversationTitle(ctx context.Context, conversation *entity.Conversation) error {
+	if conversation.UserID == "" {
+		return aichatservice.USER_ID_NOT_NULL
+	} else if conversation.MapID == "" {
+		return aichatservice.MAP_ID_NOT_NULL
+	} else if !checkConversationIsExist(ctx, a, conversation.ConversationID) {
+		return aichatservice.CONVERSATION_NOT_EXIST
+	}
+
+	conversationPO, err := CastConversationDO2PO(conversation)
+	if err != nil {
+		return err
+	}
+	Updates := make(map[string]interface{})
+	if conversationPO.Messages != nil {
+		Updates["title"] = conversationPO.Title
 	}
 
 	err = a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationPO.ConversationID, conversationPO.UserID).Updates(Updates).Error

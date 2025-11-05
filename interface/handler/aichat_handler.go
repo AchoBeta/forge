@@ -86,3 +86,17 @@ func (h *Handler) GetConversation(ctx context.Context, req *def.GetConversationR
 
 	return resp, nil
 }
+
+func (h *Handler) UpdateConversationTitle(ctx context.Context, req *def.UpdateConversationTitleRequest) (*def.UpdateConversationTitleResponse, error) {
+	params := caster.CastUpdateConversationTitleReq2Params(req)
+
+	err := h.AiChatService.UpdateConversationTitle(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &def.UpdateConversationTitleResponse{
+		Success: true,
+	}
+	return resp, nil
+}

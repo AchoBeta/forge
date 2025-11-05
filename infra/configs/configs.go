@@ -183,6 +183,7 @@ type COSConfig struct {
 }
 
 type AiChatConfig struct {
-	ApiKey    string `mapstructure:"api_key"`
-	ModelName string `mapstructure:"model_name"`
+	ApiKey       string `mapstructure:"api_key"`
+	ModelName    string `mapstructure:"model_name"`
+	SystemPrompt string `mapstructure:"system_prompt"`
 }

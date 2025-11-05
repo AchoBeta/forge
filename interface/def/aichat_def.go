@@ -58,3 +58,12 @@ type GetConversationResponse struct {
 	Messages []*entity.Message `json:"messages"`
 	Success  bool              `json:"success"`
 }
+
+type UpdateConversationTitleRequest struct {
+	ConversationID string `json:"conversation_id" binding:"required"`
+	Title          string `json:"title" binding:"required"`
+}
+
+type UpdateConversationTitleResponse struct {
+	Success bool `json:"success"`
+}

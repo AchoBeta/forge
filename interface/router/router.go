@@ -136,4 +136,8 @@ func loadAiChat(r *gin.RouterGroup) {
 	//获取某个会话的详细信息
 	// [GET] /api/biz/v1/aichat/get_conversation?conversation_id=
 	r.Handle(GET, "get_conversation", GetConversation())
+
+	//更新某个会话的标题
+	// [POST] /api/biz/v1/aichat/update_conversation_title
+	r.Handle(POST, "update_conversation_title", UpdateConversationTitle())
 }

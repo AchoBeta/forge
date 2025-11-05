@@ -15,8 +15,11 @@ type AiChatRepo interface {
 	//保存某个会话实体
 	SaveConversation(ctx context.Context, conversation *entity.Conversation) error
 
-	//更新某个会话
-	UpdateConversation(ctx context.Context, conversation *entity.Conversation) error
+	//更新某个会话的聊天记录
+	UpdateConversationMessage(ctx context.Context, conversation *entity.Conversation) error
+
+	//更新某个会话的标题
+	UpdateConversationTitle(ctx context.Context, conversation *entity.Conversation) error
 
 	//删除某个会话
 	DeleteConversation(ctx context.Context, conversationID, userID string) error

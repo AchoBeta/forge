@@ -20,6 +20,9 @@ type IAiChatService interface {
 
 	//获取某会话的详细信息
 	GetConversation(ctx context.Context, req *GetConversationParams) (*entity.Conversation, error)
+
+	//更新某会话的标题
+	UpdateConversationTitle(ctx context.Context, req *UpdateConversationTitleParams) error
 }
 
 type ProcessUserMessageParams struct {
@@ -42,4 +45,9 @@ type DelConversationParams struct {
 
 type GetConversationParams struct {
 	ConversationID string
+}
+
+type UpdateConversationTitleParams struct {
+	ConversationID string
+	Title          string
 }

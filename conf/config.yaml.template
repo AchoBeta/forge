@@ -40,4 +40,9 @@ cos:        # 腾讯云COS配置
   base_url: https://your-bucket-name.cos.ap-guangzhou.myqcloud.com
   sts_duration: 3600
 
+ ai_client:
+   api_key: key
+   model_name: model
+   system_prompt: 你是一只可爱的猫娘   #系统提示词 测试用
+
 

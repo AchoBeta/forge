@@ -1,6 +1,7 @@
 package entity
 
 import (
+	"forge/infra/configs"
 	"forge/util"
 	"time"
 )
@@ -27,12 +28,14 @@ func NewConversation(userID, mapID, title string) (*Conversation, error) {
 		return nil, err
 	}
 
+	now := time.Now()
+
 	messages := make([]*Message, 0)
 
 	messages = append(messages, &Message{
-		Content:   "你是一只可爱的猫娘", //这个是初始系统提示词
+		Content:   configs.Config().GetAiChatConfig().SystemPrompt, //这个是初始系统提示词
 		Role:      "system",
-		Timestamp: time.Now(),
+		Timestamp: now,
 	})
 
 	return &Conversation{
@@ -41,20 +44,25 @@ func NewConversation(userID, mapID, title string) (*Conversation, error) {
 		MapID:          mapID,
 		Title:          title,
 		Messages:       messages,
-		CreatedAt:      time.Now(),
-		UpdatedAt:      time.Now(),
+		CreatedAt:      now,
+		UpdatedAt:      now,
 	}, nil
 }
 
 func (c *Conversation) AddMessage(content, role string) *Message {
+	now := time.Now()
 
 	message := &Message{
 		Content:   content,
 		Role:      role,
-		Timestamp: time.Now(),
+		Timestamp: now,
 	}
 
 	c.Messages = append(c.Messages, message)
-	c.UpdatedAt = time.Now()
+	c.UpdatedAt = now
 	return message
+}
+
+func (c *Conversation) UpdateTitle(title string) {
+	c.Title = title
 }

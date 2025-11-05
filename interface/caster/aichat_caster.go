@@ -73,3 +73,13 @@ func CastGetConversationReq2Params(req *def.GetConversationRequest) *types.GetCo
 		ConversationID: req.ConversationID,
 	}
 }
+
+func CastUpdateConversationTitleReq2Params(req *def.UpdateConversationTitleRequest) *types.UpdateConversationTitleParams {
+	if req == nil {
+		return nil
+	}
+	return &types.UpdateConversationTitleParams{
+		Title:          req.Title,
+		ConversationID: req.ConversationID,
+	}
+}

@@ -24,6 +24,7 @@ func (ConversationPO) TableName() string {
 func (m *ConversationPO) BeforeCreate(tx *gorm.DB) error {
 	now := time.Now()
 	m.CreatedAt = now
+	m.UpdatedAt = now
 	return nil
 }
 

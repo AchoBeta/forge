@@ -52,8 +52,8 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.Proce
 	//添加ai消息
 	conversation.AddMessage(aiMsg, "assistant")
 
-	//更新会话
-	err = a.aiChatRepo.UpdateConversation(ctx, conversation)
+	//更新会话聊天记录
+	err = a.aiChatRepo.UpdateConversationMessage(ctx, conversation)
 	if err != nil {
 		return "", err
 	}
@@ -123,4 +123,25 @@ func (a *AiChatService) GetConversation(ctx context.Context, req *types.GetConve
 	}
 
 	return conversation, nil
+}
+
+func (a *AiChatService) UpdateConversationTitle(ctx context.Context, req *types.UpdateConversationTitleParams) error {
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
+		return AI_CHAT_PERMISSION_DENIED
+	}
+
+	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
+	if err != nil {
+		return err
+	}
+
+	conversation.UpdateTitle(req.Title)
+
+	err = a.aiChatRepo.UpdateConversationTitle(ctx, conversation)
+	if err != nil {
+		return err
+	}
+	return nil
 }
