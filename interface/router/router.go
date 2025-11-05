@@ -94,9 +94,9 @@ func loadUserService(r *gin.RouterGroup) {
 
 // loadUserAuthService 加载需要JWT鉴权的用户服务路由
 func loadUserAuthService(r *gin.RouterGroup) {
-	// 更新头像接口
-	// [PUT] /api/biz/v1/user/avatar
-	r.Handle(PUT, "avatar", UpdateAvatar())
+	// 更新头像接口（改为POST，因为要上传文件）
+	// [POST] /api/biz/v1/user/avatar
+	r.Handle(POST, "avatar", UpdateAvatar())
 }
 
 func loadMindMapService(r *gin.RouterGroup) {

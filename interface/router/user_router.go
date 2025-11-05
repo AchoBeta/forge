@@ -2,11 +2,15 @@ package router
 
 import (
 	"errors"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"forge/biz/cosservice"
 	"forge/biz/userservice"
+
 	// "forge/constant"
 	"forge/interface/def"
 	"forge/interface/handler"
@@ -71,6 +75,17 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 	}
 	if errors.Is(err, util.ErrPasswordTooLong) {
 		return response.PARAM_NOT_VALID
+	}
+
+	// COS相关错误
+	if errors.Is(err, cosservice.ErrInvalidParams) {
+		return response.PARAM_NOT_VALID
+	}
+	if errors.Is(err, cosservice.ErrPermissionDenied) {
+		return response.INSUFFICENT_PERMISSIONS
+	}
+	if errors.Is(err, cosservice.ErrInternalError) {
+		return response.INTERNAL_FILE_UPLOAD_ERROR
 	}
 
 	// 默认返回通用错误
@@ -229,21 +244,80 @@ func ResetPassword() gin.HandlerFunc {
 
 // UpdateAvatar
 //
-//	@Description:[PUT] /api/biz/v1/user/avatar
+//	@Description:[POST] /api/biz/v1/user/avatar
 //	@return gin.HandlerFunc
 func UpdateAvatar() gin.HandlerFunc {
 	return func(gCtx *gin.Context) {
-		req := &def.UpdateAvatarReq{}
 		ctx := gCtx.Request.Context()
-		if err := gCtx.ShouldBindJSON(req); err != nil {
+
+		// 设置文件大小限制（8MB）
+		gCtx.Request.ParseMultipartForm(8 << 20)
+
+		// 接收文件
+		file, err := gCtx.FormFile("avatar") // "avatar" 是前端表单字段名
+		if err != nil {
+			// 检查是否是文件大小错误
+			if strings.Contains(err.Error(), "too large") || strings.Contains(err.Error(), "request body too large") {
+				zlog.CtxErrorf(ctx, "file too large: %v", err)
+				gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+					Code:    response.PARAM_FILE_SIZE_TOO_BIG.Code,
+					Message: response.PARAM_FILE_SIZE_TOO_BIG.Msg,
+					Data:    def.UpdateAvatarResp{Success: false},
+				})
+				return
+			}
+			zlog.CtxErrorf(ctx, "failed to get file from form: %v", err)
 			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
-				Code:    response.INVALID_PARAMS.Code,
-				Message: response.INVALID_PARAMS.Msg,
+				Code:    response.PARAM_NOT_VALID.Code,
+				Message: response.PARAM_NOT_VALID.Msg,
 				Data:    def.UpdateAvatarResp{Success: false},
 			})
 			return
 		}
 
+		// 检查文件大小
+		if file.Size > 5*1024*1024 { // 5MB
+			zlog.CtxErrorf(ctx, "file size too large: %d bytes", file.Size)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.PARAM_FILE_SIZE_TOO_BIG.Code,
+				Message: response.PARAM_FILE_SIZE_TOO_BIG.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
+			})
+			return
+		}
+
+		// 打开文件
+		src, err := file.Open()
+		if err != nil {
+			zlog.CtxErrorf(ctx, "failed to open file: %v", err)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INTERNAL_FILE_UPLOAD_ERROR.Code,
+				Message: response.INTERNAL_FILE_UPLOAD_ERROR.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
+			})
+			return
+		}
+		defer src.Close() // 确保关闭
+
+		// 读取文件内容
+		fileData, err := io.ReadAll(src)
+		if err != nil {
+			zlog.CtxErrorf(ctx, "failed to read file: %v", err)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INTERNAL_FILE_UPLOAD_ERROR.Code,
+				Message: response.INTERNAL_FILE_UPLOAD_ERROR.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
+			})
+			return
+		}
+
+		// 构建请求对象
+		req := &def.UpdateAvatarReq{
+			FileData: fileData,
+			Filename: file.Filename,
+		}
+
+		// 调用handler
 		rsp, err := handler.GetHandler().UpdateAvatar(ctx, req)
 		r := response.NewResponse(gCtx)
 

@@ -99,22 +99,39 @@ func (h *Handler) UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (r
 	}()
 
 	// 从context中获取用户信息（JWT中间件已注入）
-	// 注意：JWT中间件已经验证并注入用户信息，理论上不会出现user不存在的情况
-	// 如果出现，说明是程序逻辑问题，应该返回内部错误
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
 		return nil, userservice.ErrInternalError
 	}
 
-	// 调用服务层更新头像
-	err = h.UserService.UpdateAvatar(ctx, user.UserID, req.AvatarURL)
+	// 参数校验
+	if len(req.FileData) == 0 {
+		zlog.CtxErrorf(ctx, "file data is empty")
+		return nil, userservice.ErrInvalidParams
+	}
+	if req.Filename == "" {
+		zlog.CtxErrorf(ctx, "filename is empty")
+		return nil, userservice.ErrInvalidParams
+	}
+
+	// 调用COS服务上传头像
+	avatarURL, err := h.COSService.UploadAvatar(ctx, user.UserID, req.FileData, req.Filename)
 	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to upload avatar to COS: %v", err)
+		return nil, err
+	}
+
+	// 调用用户服务更新头像URL
+	err = h.UserService.UpdateAvatar(ctx, user.UserID, avatarURL)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to update avatar in database: %v", err)
 		return nil, err
 	}
 
 	rsp = &def.UpdateAvatarResp{
-		Success: true,
+		AvatarURL: avatarURL,
+		Success:   true,
 	}
 	return rsp, nil
 }
