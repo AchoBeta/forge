@@ -160,7 +160,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	}
 
 	// 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return nil, err
 	}
 
@@ -268,8 +268,8 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 		return err
 	}
 
-	// 4. 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	// 校验验证码 code（短信/邮箱）
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return err
 	}
 
@@ -370,7 +370,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 }
 
 // VerifyCode 校验验证码
-func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code string) error {
+func (u *UserServiceImpl) VerifyCode(ctx context.Context, account, accountType, code string) error {
 	if account == "" || code == "" {
 		return ErrInvalidParams
 	}

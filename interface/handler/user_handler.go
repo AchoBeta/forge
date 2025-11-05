@@ -50,7 +50,11 @@ func (h *Handler) Register(ctx context.Context, req *def.RegisterReq) (rsp *def.
 	// DTO -> Service 层表单
 	params := caster.CastRegisterReq2Params(req)
 
-	// 请求限流、验证验证码等 占位
+	// 请求限流、验证验证码等
+	// 验证验证码
+	if err := h.UserService.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+		return nil, err
+	}
 
 	// -------------------------
 

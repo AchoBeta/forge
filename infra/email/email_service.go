@@ -24,7 +24,7 @@ var es *emailServiceImpl
 
 func InitEmailService(smtpConfig configs.SMTPConfig) {
 	// 加载验证码邮件模板
-	templatePath := filepath.Join(util.GetRootPath(""), "template", "email", "verification_code.html")
+	templatePath := filepath.Join(util.GetRootPath("forge"), "template", "email", "verification_code.html")
 	tmpl, err := template.ParseFiles(templatePath)
 	if err != nil {
 		zlog.Errorf("加载邮件模板失败: %v, 模板路径: %s", err, templatePath)

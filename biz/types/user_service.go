@@ -19,6 +19,9 @@ type IUserService interface {
 
 	// SendVerificationCode 发送验证码
 	SendVerificationCode(ctx context.Context, account, accountType string) error
+
+	// VerifyCode 验证验证码
+	VerifyCode(ctx context.Context, account, accountType, code string) error
 }
 
 // 注册参数
