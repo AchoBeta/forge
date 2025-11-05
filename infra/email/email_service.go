@@ -5,12 +5,11 @@ import (
 	"context"
 	"fmt"
 	"html/template"
-	"path/filepath"
 
 	"forge/biz/adapter"
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
-	"forge/util"
+	templateEmail "forge/template/email"
 
 	"gopkg.in/gomail.v2"
 )
@@ -23,19 +22,19 @@ type emailServiceImpl struct {
 var es *emailServiceImpl
 
 func InitEmailService(smtpConfig configs.SMTPConfig) {
-	// 加载验证码邮件模板
-	templatePath := filepath.Join(util.GetRootPath("forge"), "template", "email", "verification_code.html")
-	tmpl, err := template.ParseFiles(templatePath)
+	// 使用 embed 包嵌入的模板内容（编译时嵌入到二进制文件中）
+	// 模板文件保留在原位置 template/email/verification_code.html
+	tmpl, err := template.New("verification_code").Parse(templateEmail.VerificationCodeTemplate)
 	if err != nil {
-		zlog.Errorf("加载邮件模板失败: %v, 模板路径: %s", err, templatePath)
-		panic(fmt.Sprintf("加载邮件模板失败: %v", err))
+		zlog.Errorf("解析邮件模板失败: %v", err)
+		panic(fmt.Sprintf("解析邮件模板失败: %v", err))
 	}
 
 	es = &emailServiceImpl{
 		smtpConfig:               smtpConfig,
 		verificationCodeTemplate: tmpl,
 	}
-	zlog.Infof("邮件服务初始化成功，模板路径: %s", templatePath)
+	zlog.Infof("邮件服务初始化成功，模板已嵌入到二进制文件中")
 }
 
 func GetEmailService() adapter.EmailService {

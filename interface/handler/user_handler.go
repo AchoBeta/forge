@@ -52,15 +52,7 @@ func (h *Handler) Register(ctx context.Context, req *def.RegisterReq) (rsp *def.
 	// DTO -> Service 层表单
 	params := caster.CastRegisterReq2Params(req)
 
-	// 请求限流、验证验证码等
-	// 验证验证码
-	if err := h.UserService.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
-		return nil, err
-	}
-
-	// -------------------------
-
-	// 向下调用服务层
+	// 向下调用服务层（验证码验证在 service 层完成）
 	_, err = h.UserService.Register(ctx, params)
 	if err != nil {
 		return nil, err
@@ -76,7 +68,7 @@ func (h *Handler) ResetPassword(ctx context.Context, req *def.ResetPasswordReq) 
 	// DTO -> Service 层表单
 	params := caster.CastResetPasswordReq2Params(req)
 
-	// 向下调用服务层 重置密码函数
+	// 向下调用服务层（验证码验证在 service 层完成）
 	err = h.UserService.ResetPassword(ctx, params)
 	if err != nil {
 		return nil, err

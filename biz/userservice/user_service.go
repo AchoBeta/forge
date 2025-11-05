@@ -6,7 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
 	"net/url"
+	"path"
 	"strings"
 	"time"
 
@@ -424,7 +426,7 @@ func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL st
 	}
 
 	// URL验证
-	if err := validateAvatarURL(ctx, avatarURL, userID); err != nil {
+	if err := validateAvatarURL(ctx, avatarURL); err != nil {
 		zlog.CtxErrorf(ctx, "avatar URL validation failed: %v", err)
 		return ErrInvalidParams
 	}
@@ -450,7 +452,9 @@ func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL st
 }
 
 // validateAvatarURL URL验证函数
-func validateAvatarURL(ctx context.Context, avatarURL, userID string) error {
+// 注意：移除了路径格式强制检查（原 /user/{userID}/avatar/），允许使用外部服务
+// 如果需要对自有存储路径进行限制，应该在存储访问层（COS IAM策略）实现
+func validateAvatarURL(ctx context.Context, avatarURL string) error {
 	// 1. URL长度限制（防止过长的URL）
 	const maxURLLength = 2048 // RFC 7230 建议的最大URL长度
 	if len(avatarURL) > maxURLLength {
@@ -475,71 +479,186 @@ func validateAvatarURL(ctx context.Context, avatarURL, userID string) error {
 	}
 
 	// 5. 验证Host格式（不能包含危险字符）
-	if strings.Contains(parsedURL.Host, "..") || strings.Contains(parsedURL.Host, "//") {
-		return fmt.Errorf("invalid URL: host contains dangerous characters")
+	// 注意：移除了对 ".." 的检查，因为主机名中的 ".." 不是安全问题（路径遍历发生在路径部分）
+	// 虽然 url.Parse 通常会处理 "//"，但保留检查以防格式错误
+	if strings.Contains(parsedURL.Host, "//") {
+		return fmt.Errorf("invalid URL: host contains invalid characters")
 	}
 
-	// 6. 验证路径不为空
-	if parsedURL.Path == "" || parsedURL.Path == "/" {
-		return fmt.Errorf("invalid URL: path is required")
+	// 6. SSRF 防护：禁止访问内网/私有IP地址
+	// 解析 Host（可能包含端口，需要去掉）
+	host := parsedURL.Host
+	if strings.Contains(host, ":") {
+		host, _, _ = net.SplitHostPort(parsedURL.Host)
 	}
 
-	// 7. 验证路径格式（应该符合 user/{userID}/avatar/... 格式）
-	expectedPrefix := fmt.Sprintf("/user/%s/avatar/", userID)
-	if !strings.HasPrefix(parsedURL.Path, expectedPrefix) {
-		return fmt.Errorf("invalid URL path: must start with %s, got %s", expectedPrefix, parsedURL.Path)
+	// 解析 IP 地址
+	ip := net.ParseIP(host)
+	if ip != nil {
+		// 如果是 IP 地址，检查是否为私有/保留地址
+		if isPrivateIP(ip) {
+			return fmt.Errorf("invalid URL: private/internal IP addresses are not allowed for security reasons")
+		}
+	} else {
+		// 如果是域名，解析为 IP 并检查
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			// 域名解析失败，拒绝URL（可能是恶意域名或网络问题）
+			zlog.CtxErrorf(ctx, "failed to resolve host %s: %v", host, err)
+			return fmt.Errorf("invalid URL: failed to resolve host %s", host)
+		}
+
+		// 检查所有解析出的 IP 地址
+		if len(ips) == 0 {
+			return fmt.Errorf("invalid URL: host %s resolves to no IP addresses", host)
+		}
+
+		for _, resolvedIP := range ips {
+			if isPrivateIP(resolvedIP) {
+				return fmt.Errorf("invalid URL: host %s resolves to private/internal IP address", host)
+			}
+		}
 	}
 
-	// 8. 验证路径中不能包含危险字符（防止路径遍历攻击）
+	// 7. 验证路径中不能包含危险字符（防止路径遍历攻击）
 	if strings.Contains(parsedURL.Path, "..") || strings.Contains(parsedURL.Path, "//") {
 		return fmt.Errorf("invalid URL path: contains dangerous characters")
 	}
 
-	// 9. 验证路径中不能包含查询参数和锚点（防止注入攻击）
-	if parsedURL.RawQuery != "" {
-		return fmt.Errorf("invalid URL: query parameters are not allowed")
-	}
+	// 8. 允许查询参数（外部服务如 Gravatar、CDN 需要查询参数）
+	// 但禁止锚点（Fragment），因为锚点不会发送到服务器
 	if parsedURL.Fragment != "" {
 		return fmt.Errorf("invalid URL: fragment is not allowed")
 	}
 
-	// 10. 验证文件名格式（应该是一个有效的文件名）
-	pathParts := strings.Split(parsedURL.Path, "/")
-	if len(pathParts) == 0 {
-		return fmt.Errorf("invalid URL path: empty path segments")
-	}
-	fileName := pathParts[len(pathParts)-1]
-	if fileName == "" {
-		return fmt.Errorf("invalid URL path: filename is required")
+	// 9. 验证URL路径或查询参数中是否包含图片格式标识
+	// 支持多种常见格式：
+	// - 直接路径：https://example.com/avatar.jpg
+	// - 查询参数：https://gravatar.com/avatar/xxx?s=200&d=identicon
+	// - 路径+查询：https://cdn.example.com/user123.jpg?width=200
+
+	// 从路径中提取可能的文件名
+	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	var fileName string
+	if len(pathParts) > 0 {
+		fileName = pathParts[len(pathParts)-1]
 	}
 
-	// 11. 验证文件名不能包含危险字符
-	dangerousChars := []string{"<", ">", "|", "\"", ":", "?", "*", "\\", "\x00"}
-	for _, char := range dangerousChars {
-		if strings.Contains(fileName, char) {
-			return fmt.Errorf("invalid filename: contains dangerous character '%s'", char)
-		}
-	}
-
-	// 12. 验证文件扩展名（只允许图片格式）
-	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
-	fileNameLower := strings.ToLower(fileName)
+	// 检查路径中的文件扩展名
 	hasValidExtension := false
-	for _, ext := range allowedExtensions {
-		if strings.HasSuffix(fileNameLower, ext) {
-			hasValidExtension = true
-			break
+	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	if fileName != "" {
+		// 使用 path.Ext 提取真正的文件扩展名，避免被恶意文件名绕过（如 avatar.jpg.exe）
+		fileExt := strings.ToLower(path.Ext(fileName))
+		for _, ext := range allowedExtensions {
+			if fileExt == ext {
+				hasValidExtension = true
+				break
+			}
 		}
 	}
-	if !hasValidExtension {
-		return fmt.Errorf("invalid file extension: only image formats are allowed (jpg, jpeg, png, gif, webp, bmp, svg)")
+
+	// 如果路径中没有有效的扩展名，检查查询参数中是否有图片相关的标识
+	// 例如：?format=png, ?type=image 等（某些服务使用查询参数指定格式）
+	if !hasValidExtension && parsedURL.RawQuery != "" {
+		queryLower := strings.ToLower(parsedURL.RawQuery)
+		// 检查查询参数中是否包含图片格式标识
+		imageFormatKeywords := []string{"format=png", "format=jpg", "format=jpeg", "format=gif",
+			"type=image", "mime=image", "ext=png", "ext=jpg", "ext=jpeg"}
+		for _, keyword := range imageFormatKeywords {
+			if strings.Contains(queryLower, keyword) {
+				hasValidExtension = true
+				break
+			}
+		}
 	}
 
-	// 13. 验证文件名长度（防止过长的文件名）
-	const maxFileNameLength = 255
-	if len(fileName) > maxFileNameLength {
-		return fmt.Errorf("invalid filename: too long, exceeds %d characters", maxFileNameLength)
+	// 如果既没有路径扩展名，也没有查询参数标识，允许通过但记录警告
+	// 因为某些服务可能通过 Content-Type 响应头来标识图片，而不是URL
+	if !hasValidExtension {
+		zlog.CtxWarnf(ctx, "avatar URL does not contain explicit image format identifier: %s", avatarURL)
+		// 不返回错误，允许通过，因为某些合法的图片URL可能没有扩展名
+	}
+
+	// 10. 如果路径中有文件名，验证文件名格式
+	if fileName != "" {
+		// 验证文件名长度（防止过长的文件名）
+		const maxFileNameLength = 255
+		if len(fileName) > maxFileNameLength {
+			return fmt.Errorf("invalid filename: too long, exceeds %d characters", maxFileNameLength)
+		}
+
+		// 验证文件名不能包含明显的危险字符
+		// 注意：这里不禁止 : 和 ?，因为它们可能在合法的URL中出现
+		dangerousChars := []string{"<", ">", "|", "\"", "*", "\\", "\x00"}
+		for _, char := range dangerousChars {
+			if strings.Contains(fileName, char) {
+				return fmt.Errorf("invalid filename: contains dangerous character '%s'", char)
+			}
+		}
 	}
 
 	return nil
+}
+
+// isPrivateIP 检查 IP 地址是否为私有/保留地址（用于 SSRF 防护）
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// IPv4 私有地址范围
+	if ip4 := ip.To4(); ip4 != nil {
+		// 127.0.0.0/8 - 回环地址
+		if ip4[0] == 127 {
+			return true
+		}
+		// 10.0.0.0/8 - 私有地址
+		if ip4[0] == 10 {
+			return true
+		}
+		// 172.16.0.0/12 - 私有地址
+		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
+			return true
+		}
+		// 192.168.0.0/16 - 私有地址
+		if ip4[0] == 192 && ip4[1] == 168 {
+			return true
+		}
+		// 169.254.0.0/16 - 链路本地地址
+		if ip4[0] == 169 && ip4[1] == 254 {
+			return true
+		}
+		// 0.0.0.0/8 - 保留地址
+		if ip4[0] == 0 {
+			return true
+		}
+		// 224.0.0.0/4 - 多播地址（通常不应该用于 HTTP）
+		if ip4[0] >= 224 && ip4[0] <= 239 {
+			return true
+		}
+		return false
+	}
+
+	// IPv6 私有地址范围
+	if ip16 := ip.To16(); ip16 != nil {
+		// ::1 - 回环地址
+		if ip.IsLoopback() {
+			return true
+		}
+		// fc00::/7 - 唯一本地地址
+		if ip16[0] == 0xfc || ip16[0] == 0xfd {
+			return true
+		}
+		// fe80::/10 - 链路本地地址
+		if ip16[0] == 0xfe && (ip16[1]&0xc0) == 0x80 {
+			return true
+		}
+		// ::/128 - 未指定地址
+		if ip.IsUnspecified() {
+			return true
+		}
+	}
+
+	return false
 }
