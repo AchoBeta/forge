@@ -428,7 +428,8 @@ func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL st
 	// URL验证
 	if err := validateAvatarURL(ctx, avatarURL); err != nil {
 		zlog.CtxErrorf(ctx, "avatar URL validation failed: %v", err)
-		return ErrInvalidParams
+		// 包装错误以保留详细验证信息，同时仍可用 errors.Is 检查错误类型
+		return fmt.Errorf("%w: %v", ErrInvalidParams, err) // 保留详细错误
 	}
 
 	// 检查用户是否存在（GetUserByID 包含状态检查）
@@ -486,11 +487,8 @@ func validateAvatarURL(ctx context.Context, avatarURL string) error {
 	}
 
 	// 6. SSRF 防护：禁止访问内网/私有IP地址
-	// 解析 Host（可能包含端口，需要去掉）
-	host := parsedURL.Host
-	if strings.Contains(host, ":") {
-		host, _, _ = net.SplitHostPort(parsedURL.Host)
-	}
+	// 使用 Hostname() 方法提取主机名，自动处理端口和 IPv6 方括号
+	host := parsedURL.Hostname()
 
 	// 解析 IP 地址
 	ip := net.ParseIP(host)
@@ -547,6 +545,9 @@ func validateAvatarURL(ctx context.Context, avatarURL string) error {
 	// 检查路径中的文件扩展名
 	hasValidExtension := false
 	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	// 允许的图片格式（不带点，用于查询参数）
+	validImageFormats := []string{"png", "jpg", "jpeg", "gif", "webp", "bmp", "svg"}
+
 	if fileName != "" {
 		// 使用 path.Ext 提取真正的文件扩展名，避免被恶意文件名绕过（如 avatar.jpg.exe）
 		fileExt := strings.ToLower(path.Ext(fileName))
@@ -561,14 +562,39 @@ func validateAvatarURL(ctx context.Context, avatarURL string) error {
 	// 如果路径中没有有效的扩展名，检查查询参数中是否有图片相关的标识
 	// 例如：?format=png, ?type=image 等（某些服务使用查询参数指定格式）
 	if !hasValidExtension && parsedURL.RawQuery != "" {
-		queryLower := strings.ToLower(parsedURL.RawQuery)
-		// 检查查询参数中是否包含图片格式标识
-		imageFormatKeywords := []string{"format=png", "format=jpg", "format=jpeg", "format=gif",
-			"type=image", "mime=image", "ext=png", "ext=jpg", "ext=jpeg"}
-		for _, keyword := range imageFormatKeywords {
-			if strings.Contains(queryLower, keyword) {
-				hasValidExtension = true
-				break
+		// 解析查询参数，避免误判（如 ?some_other_param=format=png 不应该被识别）
+		// url.Values.Get() 只返回指定键的值，不会因为参数值中包含字符串而误判
+		query := parsedURL.Query()
+
+		// 检查 format 参数（如 ?format=png）
+		if format := strings.ToLower(query.Get("format")); format != "" {
+			for _, validFormat := range validImageFormats {
+				if format == validFormat {
+					hasValidExtension = true
+					break
+				}
+			}
+		}
+
+		// 检查 type 参数（如 ?type=image）
+		if !hasValidExtension && strings.ToLower(query.Get("type")) == "image" {
+			hasValidExtension = true
+		}
+
+		// 检查 mime 参数（如 ?mime=image/png）
+		if !hasValidExtension && strings.Contains(strings.ToLower(query.Get("mime")), "image") {
+			hasValidExtension = true
+		}
+
+		// 检查 ext 参数（如 ?ext=png）
+		if !hasValidExtension {
+			if ext := strings.ToLower(query.Get("ext")); ext != "" {
+				for _, validExt := range validImageFormats {
+					if ext == validExt {
+						hasValidExtension = true
+						break
+					}
+				}
 			}
 		}
 	}
@@ -607,58 +633,17 @@ func isPrivateIP(ip net.IP) bool {
 		return false
 	}
 
-	// IPv4 私有地址范围
+	// 使用标准库函数检查常见的私有/保留地址范围（同时支持 IPv4 和 IPv6）
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() || ip.IsMulticast() {
+		return true
+	}
+
+	// 标准库的 IsUnspecified() 只检查单个地址（0.0.0.0 或 ::），但对于 SSRF 防护，
+	// 我们应该拒绝整个 0.0.0.0/8 范围（0.0.0.0 到 0.255.255.255）
 	if ip4 := ip.To4(); ip4 != nil {
-		// 127.0.0.0/8 - 回环地址
-		if ip4[0] == 127 {
-			return true
-		}
-		// 10.0.0.0/8 - 私有地址
-		if ip4[0] == 10 {
-			return true
-		}
-		// 172.16.0.0/12 - 私有地址
-		if ip4[0] == 172 && ip4[1] >= 16 && ip4[1] <= 31 {
-			return true
-		}
-		// 192.168.0.0/16 - 私有地址
-		if ip4[0] == 192 && ip4[1] == 168 {
-			return true
-		}
-		// 169.254.0.0/16 - 链路本地地址
-		if ip4[0] == 169 && ip4[1] == 254 {
-			return true
-		}
-		// 0.0.0.0/8 - 保留地址
-		if ip4[0] == 0 {
-			return true
-		}
-		// 224.0.0.0/4 - 多播地址（通常不应该用于 HTTP）
-		if ip4[0] >= 224 && ip4[0] <= 239 {
-			return true
-		}
-		return false
+		return ip4[0] == 0
 	}
 
-	// IPv6 私有地址范围
-	if ip16 := ip.To16(); ip16 != nil {
-		// ::1 - 回环地址
-		if ip.IsLoopback() {
-			return true
-		}
-		// fc00::/7 - 唯一本地地址
-		if ip16[0] == 0xfc || ip16[0] == 0xfd {
-			return true
-		}
-		// fe80::/10 - 链路本地地址
-		if ip16[0] == 0xfe && (ip16[1]&0xc0) == 0x80 {
-			return true
-		}
-		// ::/128 - 未指定地址
-		if ip.IsUnspecified() {
-			return true
-		}
-	}
-
-	return false
+	// 对于 IPv6，IsUnspecified() 已足够检查未指定地址（::）
+	return ip.IsUnspecified()
 }
