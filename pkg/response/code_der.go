@@ -52,4 +52,14 @@ var (
 	COS_INVALID_DURATION       = MsgCode{Code: 4002, Msg: "无效的有效期"}
 	COS_GET_CREDENTIALS_FAILED = MsgCode{Code: 4003, Msg: "获取COS凭证失败"}
 	COS_PERMISSION_DENIED      = MsgCode{Code: 4004, Msg: "COS权限不足"}
+
+	/* ai对话错误 5000~5999 */
+
+	CONVERSATION_ID_NOT_NULL    = MsgCode{Code: 5200, Msg: "会话ID不能为空"}
+	USER_ID_NOT_NULL            = MsgCode{Code: 5201, Msg: "用户ID不能为空"}
+	MAP_ID_NOT_NULL             = MsgCode{Code: 5202, Msg: "导图ID不能为空"}
+	CONVERSATION_TITLE_NOT_NULL = MsgCode{Code: 5203, Msg: "会话标题不能为空"}
+	CONVERSATION_NOT_EXIST      = MsgCode{Code: 5204, Msg: "该会话不存在"}
+	AI_CHAT_PERMISSION_DENIED   = MsgCode{Code: 5205, Msg: "会话权限不足"}
+	MIND_MAP_NOT_EXIST          = MsgCode{Code: 5206, Msg: "该导图不存在"}
 )
