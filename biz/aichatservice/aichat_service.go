@@ -9,6 +9,16 @@ import (
 	"forge/pkg/log/zlog"
 )
 
+var (
+	CONVERSATION_ID_NOT_NULL    = errors.New("会话ID不能为空")
+	USER_ID_NOT_NULL            = errors.New("用户ID不能为空")
+	MAP_ID_NOT_NULL             = errors.New("导图ID不能为空")
+	CONVERSATION_TITLE_NOT_NULL = errors.New("会话标题不能为空")
+	CONVERSATION_NOT_EXIST      = errors.New("该会话不存在")
+	AI_CHAT_PERMISSION_DENIED   = errors.New("会话权限不足")
+	MIND_MAP_NOT_EXIST          = errors.New("该导图不存在")
+)
+
 type AiChatService struct {
 	aiChatRepo repo.AiChatRepo
 	einoServer repo.EinoServer
@@ -22,7 +32,7 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.Proce
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return "", errors.New("会话权限不足")
+		return "", AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
@@ -55,7 +65,7 @@ func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.Save
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return errors.New("会话权限不足")
+		return AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversation, err := entity.NewConversation(user.UserID, req.MapID, req.Title)
@@ -74,7 +84,7 @@ func (a *AiChatService) GetConversationList(ctx context.Context, req *types.GetC
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return nil, errors.New("会话权限不足")
+		return nil, AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversationList, err := a.aiChatRepo.GetMapAllConversation(ctx, req.MapID, user.UserID)
@@ -89,7 +99,7 @@ func (a *AiChatService) DelConversation(ctx context.Context, req *types.DelConve
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return errors.New("会话权限不足")
+		return AI_CHAT_PERMISSION_DENIED
 	}
 
 	err := a.aiChatRepo.DeleteConversation(ctx, req.ConversationID, user.UserID)
@@ -104,7 +114,7 @@ func (a *AiChatService) GetConversation(ctx context.Context, req *types.GetConve
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return nil, errors.New("会话权限不足")
+		return nil, AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)

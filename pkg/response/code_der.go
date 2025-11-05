@@ -61,4 +61,5 @@ var (
 	CONVERSATION_TITLE_NOT_NULL = MsgCode{Code: 5203, Msg: "会话标题不能为空"}
 	CONVERSATION_NOT_EXIST      = MsgCode{Code: 5204, Msg: "该会话不存在"}
 	AI_CHAT_PERMISSION_DENIED   = MsgCode{Code: 5205, Msg: "会话权限不足"}
+	MIND_MAP_NOT_EXIST          = MsgCode{Code: 5206, Msg: "该导图不存在"}
 )

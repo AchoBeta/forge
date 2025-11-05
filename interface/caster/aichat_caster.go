@@ -47,6 +47,8 @@ func CastConversationsDOs2Resp(conversations []*entity.Conversation) []def.Conve
 		conversationsData[i] = def.ConversationData{
 			ConversationID: conversation.ConversationID,
 			Title:          conversation.Title,
+			CreatedAt:      conversation.CreatedAt,
+			UpdatedAt:      conversation.UpdatedAt,
 		}
 	}
 

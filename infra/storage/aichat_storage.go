@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"forge/biz/aichatservice"
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/infra/database"
@@ -31,15 +32,15 @@ func GetAiChatPersistence() repo.AiChatRepo { return cp }
 
 func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID, userID string) (*entity.Conversation, error) {
 	if conversationID == "" {
-		return nil, fmt.Errorf("会话ID不能为空")
+		return nil, aichatservice.CONVERSATION_ID_NOT_NULL
 	} else if userID == "" {
-		return nil, fmt.Errorf("用户ID不能为空")
+		return nil, aichatservice.USER_ID_NOT_NULL
 	}
 
 	var conversationPO po.ConversationPO
 	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).First(&conversationPO).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, fmt.Errorf("该会话不存在")
+			return nil, aichatservice.CONVERSATION_NOT_EXIST
 		}
 		return nil, fmt.Errorf("数据库出错 :%v", err)
 
@@ -50,10 +51,13 @@ func (a *aiChatPersistence) GetConversation(ctx context.Context, conversationID,
 
 func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, userID string) ([]*entity.Conversation, error) {
 	if mapID == "" {
-		return nil, fmt.Errorf("导图ID不能为空")
+		return nil, aichatservice.MAP_ID_NOT_NULL
 	} else if userID == "" {
-		return nil, fmt.Errorf("用户ID不能为空")
+		return nil, aichatservice.USER_ID_NOT_NULL
+	} else if !checkMapIsExist(ctx, a, mapID) {
+		return nil, aichatservice.MIND_MAP_NOT_EXIST
 	}
+
 	var conversationPOs []po.ConversationPO
 	if err := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("map_id = ? AND user_id = ?", mapID, userID).Find(&conversationPOs).Error; err != nil {
 		return nil, fmt.Errorf("获取导图会话时 数据库出错 %w", err)
@@ -64,13 +68,15 @@ func (a *aiChatPersistence) GetMapAllConversation(ctx context.Context, mapID, us
 
 func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *entity.Conversation) error {
 	if conversation.ConversationID == "" || conversation.Title == "" || conversation.MapID == "" {
-		return fmt.Errorf("会话ID不能为空")
+		return aichatservice.CONVERSATION_ID_NOT_NULL
 	} else if conversation.UserID == "" {
-		return fmt.Errorf("用户ID不能为空")
+		return aichatservice.USER_ID_NOT_NULL
 	} else if conversation.MapID == "" {
-		return fmt.Errorf("导图ID不能为空")
+		return aichatservice.MAP_ID_NOT_NULL
 	} else if conversation.Title == "" {
-		return fmt.Errorf("会话标题不能为空")
+		return aichatservice.CONVERSATION_TITLE_NOT_NULL
+	} else if !checkMapIsExist(ctx, a, conversation.MapID) {
+		return aichatservice.MIND_MAP_NOT_EXIST
 	}
 
 	conversationPO, err := CastConversationDO2PO(conversation)
@@ -86,9 +92,11 @@ func (a *aiChatPersistence) SaveConversation(ctx context.Context, conversation *
 
 func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation *entity.Conversation) error {
 	if conversation.UserID == "" {
-		return fmt.Errorf("用户ID不能为空")
+		return aichatservice.USER_ID_NOT_NULL
 	} else if conversation.MapID == "" {
-		return fmt.Errorf("导图ID不能为空")
+		return aichatservice.MAP_ID_NOT_NULL
+	} else if !checkConversationIsExist(ctx, a, conversation.ConversationID) {
+		return aichatservice.CONVERSATION_NOT_EXIST
 	}
 
 	conversationPO, err := CastConversationDO2PO(conversation)
@@ -113,17 +121,29 @@ func (a *aiChatPersistence) UpdateConversation(ctx context.Context, conversation
 
 func (a *aiChatPersistence) DeleteConversation(ctx context.Context, conversationID, userID string) error {
 	if conversationID == "" {
-		return fmt.Errorf("会话ID不能为空")
+		return aichatservice.CONVERSATION_ID_NOT_NULL
 	} else if userID == "" {
-		return fmt.Errorf("用户ID不能为空")
+		return aichatservice.USER_ID_NOT_NULL
 	}
 
 	result := a.db.WithContext(ctx).Model(&po.ConversationPO{}).Where("conversation_id = ? AND user_id = ?", conversationID, userID).Delete(&po.ConversationPO{})
 	if result.RowsAffected == 0 {
-		return fmt.Errorf("该会话不存在")
+		return aichatservice.CONVERSATION_NOT_EXIST
 	}
 	if result.Error != nil {
 		return fmt.Errorf("删除会话时出错 %w", result.Error)
 	}
 	return nil
+}
+
+func checkMapIsExist(ctx context.Context, a *aiChatPersistence, checkMapID string) bool {
+	var check bool
+	a.db.WithContext(ctx).Model(&po.MindMapPO{}).Raw("SELECT EXISTS(SELECT 1 FROM achobeta_forge_mindmap WHERE map_id = ?)", checkMapID).Scan(&check)
+	return check
+}
+
+func checkConversationIsExist(ctx context.Context, a *aiChatPersistence, checkConversationID string) bool {
+	var check bool
+	a.db.WithContext(ctx).Model(&po.ConversationPO{}).Raw("SELECT EXISTS(SELECT 1 FROM achobeta_forge_conversation WHERE conversation_id = ?)", checkConversationID).Scan(&check)
+	return check
 }

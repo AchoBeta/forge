@@ -2,6 +2,7 @@ package router
 
 import (
 	"errors"
+	"forge/biz/aichatservice"
 	"forge/interface/def"
 	"forge/interface/handler"
 	"forge/pkg/log/zlog"
@@ -15,23 +16,26 @@ func aiChatServiceErrorToMsgCode(err error) response.MsgCode {
 		return response.SUCCESS
 	}
 
-	if errors.Is(err, errors.New("会话ID不能为空")) {
+	if errors.Is(err, aichatservice.CONVERSATION_ID_NOT_NULL) {
 		return response.CONVERSATION_ID_NOT_NULL
 	}
-	if errors.Is(err, errors.New("用户ID不能为空")) {
+	if errors.Is(err, aichatservice.USER_ID_NOT_NULL) {
 		return response.USER_ID_NOT_NULL
 	}
-	if errors.Is(err, errors.New("导图ID不能为空")) {
+	if errors.Is(err, aichatservice.MAP_ID_NOT_NULL) {
 		return response.MAP_ID_NOT_NULL
 	}
-	if errors.Is(err, errors.New("会话标题不能为空")) {
+	if errors.Is(err, aichatservice.CONVERSATION_TITLE_NOT_NULL) {
 		return response.CONVERSATION_TITLE_NOT_NULL
 	}
-	if errors.Is(err, errors.New("该会话不存在")) {
+	if errors.Is(err, aichatservice.CONVERSATION_NOT_EXIST) {
 		return response.CONVERSATION_NOT_EXIST
 	}
-	if errors.Is(err, errors.New("会话权限不足")) {
+	if errors.Is(err, aichatservice.AI_CHAT_PERMISSION_DENIED) {
 		return response.AI_CHAT_PERMISSION_DENIED
+	}
+	if errors.Is(err, aichatservice.MIND_MAP_NOT_EXIST) {
+		return response.MIND_MAP_NOT_EXIST
 	}
 
 	return response.COMMON_FAIL
@@ -49,6 +53,7 @@ func SendMessage() gin.HandlerFunc {
 				Message: response.PARAM_NOT_COMPLETE.Msg,
 				Data:    def.ProcessUserMessageResponse{Success: false},
 			})
+			return
 		}
 
 		resp, err := handler.GetHandler().SendMessage(ctx, &req)
@@ -66,6 +71,7 @@ func SendMessage() gin.HandlerFunc {
 				Message: msgCode.Msg,
 				Data:    def.ProcessUserMessageResponse{Success: false},
 			})
+			return
 		} else {
 			r.Success(resp)
 		}
@@ -84,6 +90,7 @@ func SaveNewConversation() gin.HandlerFunc {
 				Message: response.PARAM_NOT_COMPLETE.Msg,
 				Data:    def.SaveNewConversationResponse{Success: false},
 			})
+			return
 		}
 
 		resp, err := handler.GetHandler().SaveNewConversation(ctx, &req)
@@ -101,6 +108,7 @@ func SaveNewConversation() gin.HandlerFunc {
 				Message: msgCode.Msg,
 				Data:    def.SaveNewConversationResponse{Success: false},
 			})
+			return
 		} else {
 			r.Success(resp)
 		}
@@ -121,6 +129,7 @@ func GetConversationList() gin.HandlerFunc {
 				Message: response.PARAM_NOT_COMPLETE.Msg,
 				Data:    def.GetConversationListResponse{Success: false},
 			})
+			return
 		}
 
 		resp, err := handler.GetHandler().GetConversationList(ctx, &req)
@@ -138,6 +147,7 @@ func GetConversationList() gin.HandlerFunc {
 				Message: msgCode.Msg,
 				Data:    def.GetConversationListResponse{Success: false},
 			})
+			return
 		} else {
 			r.Success(resp)
 		}

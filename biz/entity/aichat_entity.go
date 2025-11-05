@@ -30,8 +30,9 @@ func NewConversation(userID, mapID, title string) (*Conversation, error) {
 	messages := make([]*Message, 0)
 
 	messages = append(messages, &Message{
-		Content: "你是一只可爱的猫娘", //这个是初始系统提示词
-		Role:    "system",
+		Content:   "你是一只可爱的猫娘", //这个是初始系统提示词
+		Role:      "system",
+		Timestamp: time.Now(),
 	})
 
 	return &Conversation{

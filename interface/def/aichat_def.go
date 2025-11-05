@@ -1,6 +1,9 @@
 package def
 
-import "forge/biz/entity"
+import (
+	"forge/biz/entity"
+	"time"
+)
 
 // 请求体
 type ProcessUserMessageRequest struct {
@@ -27,8 +30,10 @@ type GetConversationListRequest struct {
 }
 
 type ConversationData struct {
-	ConversationID string `json:"conversation_id"`
-	Title          string `json:"title"`
+	ConversationID string    `json:"conversation_id"`
+	Title          string    `json:"title"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type GetConversationListResponse struct {
