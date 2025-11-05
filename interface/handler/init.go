@@ -30,6 +30,7 @@ type IHandler interface {
 	SaveNewConversation(ctx context.Context, req *def.SaveNewConversationRequest) (*def.SaveNewConversationResponse, error)
 	GetConversationList(ctx context.Context, req *def.GetConversationListRequest) (*def.GetConversationListResponse, error)
 	DelConversation(ctx context.Context, req *def.DelConversationRequest) (*def.DelConversationResponse, error)
+	GetConversation(ctx context.Context, req *def.GetConversationRequest) (*def.GetConversationResponse, error)
 }
 
 var handler IHandler

@@ -99,3 +99,18 @@ func (a *AiChatService) DelConversation(ctx context.Context, req *types.DelConve
 
 	return nil
 }
+
+func (a *AiChatService) GetConversation(ctx context.Context, req *types.GetConversationParams) (*entity.Conversation, error) {
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
+		return nil, errors.New("会话权限不足")
+	}
+
+	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
+	if err != nil {
+		return nil, err
+	}
+
+	return conversation, nil
+}

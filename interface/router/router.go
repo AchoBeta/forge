@@ -126,10 +126,14 @@ func loadAiChat(r *gin.RouterGroup) {
 	r.Handle(POST, "save_conversation", SaveNewConversation())
 
 	//获取该导图的所有会话
-	// [GET] /api/biz/v1/aichat/get_conversation_list
+	// [GET] /api/biz/v1/aichat/get_conversation_list?map_id=
 	r.Handle(GET, "get_conversation_list", GetConversationList())
 
 	//删除会话
 	// [POST] /api/biz/v1/aichat/del_conversation
 	r.Handle(POST, "del_conversation", DelConversation())
+
+	//获取某个会话的详细信息
+	// [GET] /api/biz/v1/aichat/get_conversation?conversation_id=
+	r.Handle(GET, "get_conversation", GetConversation())
 }

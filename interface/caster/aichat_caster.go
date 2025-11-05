@@ -62,3 +62,12 @@ func CastDelConversationReq2Params(req *def.DelConversationRequest) *types.DelCo
 		ConversationID: req.ConversationID,
 	}
 }
+
+func CastGetConversationReq2Params(req *def.GetConversationRequest) *types.GetConversationParams {
+	if req == nil {
+		return nil
+	}
+	return &types.GetConversationParams{
+		ConversationID: req.ConversationID,
+	}
+}

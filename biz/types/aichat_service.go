@@ -17,6 +17,9 @@ type IAiChatService interface {
 
 	//删除某会话
 	DelConversation(ctx context.Context, req *DelConversationParams) error
+
+	//获取某会话的详细信息
+	GetConversation(ctx context.Context, req *GetConversationParams) (*entity.Conversation, error)
 }
 
 type ProcessUserMessageParams struct {
@@ -34,5 +37,9 @@ type GetConversationListParams struct {
 }
 
 type DelConversationParams struct {
+	ConversationID string
+}
+
+type GetConversationParams struct {
 	ConversationID string
 }

@@ -36,8 +36,10 @@ func Init() {
 	// loop.MustInitLoop()
 	coze.InitCozeService()
 	email.InitEmailService(configs.Config().GetSMTPConfig())
+
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
+	storage.InitAiChatStorage()
 
 	// snowflake - 从配置文件读取节点ID
 	snowflakeConfig := configs.Config().GetSnowflakeConfig()

@@ -68,3 +68,21 @@ func (h *Handler) DelConversation(ctx context.Context, req *def.DelConversationR
 	}
 	return resp, nil
 }
+
+func (h *Handler) GetConversation(ctx context.Context, req *def.GetConversationRequest) (*def.GetConversationResponse, error) {
+	params := caster.CastGetConversationReq2Params(req)
+
+	conversation, err := h.AiChatService.GetConversation(ctx, params)
+
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &def.GetConversationResponse{
+		Success:  true,
+		Title:    conversation.Title,
+		Messages: conversation.Messages,
+	}
+
+	return resp, nil
+}

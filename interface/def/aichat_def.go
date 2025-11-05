@@ -1,5 +1,7 @@
 package def
 
+import "forge/biz/entity"
+
 // 请求体
 type ProcessUserMessageRequest struct {
 	ConversationID string `json:"conversation_id" binding:"required"`
@@ -40,4 +42,14 @@ type DelConversationRequest struct {
 
 type DelConversationResponse struct {
 	Success bool `json:"success"`
+}
+
+type GetConversationRequest struct {
+	ConversationID string `json:"conversation_id" binding:"required"`
+}
+
+type GetConversationResponse struct {
+	Title    string            `json:"title"`
+	Messages []*entity.Message `json:"messages"`
+	Success  bool              `json:"success"`
 }

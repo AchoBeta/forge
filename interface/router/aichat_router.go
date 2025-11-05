@@ -112,7 +112,10 @@ func GetConversationList() gin.HandlerFunc {
 	return func(gCtx *gin.Context) {
 		var req def.GetConversationListRequest
 		ctx := gCtx.Request.Context()
-		if err := gCtx.ShouldBindQuery(&req); err != nil {
+
+		req.MapID = gCtx.Query("map_id")
+
+		if req.MapID == "" {
 			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
 				Code:    response.PARAM_NOT_COMPLETE.Code,
 				Message: response.PARAM_NOT_COMPLETE.Msg,
@@ -141,6 +144,7 @@ func GetConversationList() gin.HandlerFunc {
 	}
 }
 
+// DelConversation 删除某个会话
 func DelConversation() gin.HandlerFunc {
 	return func(gCtx *gin.Context) {
 		var req def.DelConversationRequest
@@ -166,6 +170,42 @@ func DelConversation() gin.HandlerFunc {
 				Code:    msgCode.Code,
 				Message: msgCode.Msg,
 				Data:    def.DelConversationResponse{Success: false},
+			})
+		} else {
+			r.Success(resp)
+		}
+	}
+}
+
+// 获取某个会话的详细信息
+func GetConversation() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		var req def.GetConversationRequest
+		ctx := gCtx.Request.Context()
+
+		req.ConversationID = gCtx.Query("conversation_id")
+
+		if req.ConversationID == "" {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.PARAM_NOT_COMPLETE.Code,
+				Message: response.PARAM_NOT_COMPLETE.Msg,
+				Data:    def.GetConversationResponse{Success: false},
+			})
+		}
+
+		resp, err := handler.GetHandler().GetConversation(ctx, &req)
+		zlog.CtxAllInOne(ctx, "get_conversation", map[string]interface{}{"req": req}, resp, err)
+
+		r := response.NewResponse(gCtx)
+		if err != nil {
+			msgCode := aiChatServiceErrorToMsgCode(err)
+			if msgCode == response.COMMON_FAIL {
+				msgCode.Msg = err.Error()
+			}
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.GetConversationResponse{Success: false},
 			})
 		} else {
 			r.Success(resp)
