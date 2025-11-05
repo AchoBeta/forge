@@ -4,6 +4,8 @@ import (
 	"context"
 
 	// "forge/constant"
+	"forge/biz/entity"
+	"forge/biz/userservice"
 	"forge/interface/caster"
 	"forge/interface/def"
 	"forge/pkg/log/zlog"
@@ -94,6 +96,32 @@ func (h *Handler) SendCode(ctx context.Context, req *def.SendVerificationCodeReq
 	}
 
 	rsp = &def.SendVerificationCodeResp{
+		Success: true,
+	}
+	return rsp, nil
+}
+
+func (h *Handler) UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (rsp *def.UpdateAvatarResp, err error) {
+	defer func() {
+		zlog.CtxAllInOne(ctx, "handler.update_avatar", req, rsp, err)
+	}()
+
+	// 从context中获取用户信息（JWT中间件已注入）
+	// 注意：JWT中间件已经验证并注入用户信息，理论上不会出现user不存在的情况
+	// 如果出现，说明是程序逻辑问题，应该返回内部错误
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
+		return nil, userservice.ErrInternalError
+	}
+
+	// 调用服务层更新头像
+	err = h.UserService.UpdateAvatar(ctx, user.UserID, req.AvatarURL)
+	if err != nil {
+		return nil, err
+	}
+
+	rsp = &def.UpdateAvatarResp{
 		Success: true,
 	}
 	return rsp, nil

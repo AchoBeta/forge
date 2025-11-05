@@ -62,6 +62,15 @@ type ResetPasswordResp struct {
 	Success bool `json:"success"`
 }
 
+//---------更新头像-----------
+type UpdateAvatarReq struct {
+	AvatarURL string `json:"avatar_url" binding:"required"` // 头像URL
+}
+
+type UpdateAvatarResp struct {
+	Success bool `json:"success"` // 更新是否成功
+}
+
 //---------发送验证码-----------
 type SendVerificationCodeReq struct {
 	Account     string `json:"account"`      // 账号（手机号或邮箱）  目前只支持邮箱 邮件收取验证码

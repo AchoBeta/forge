@@ -22,6 +22,9 @@ type IUserService interface {
 
 	// VerifyCode 验证验证码
 	VerifyCode(ctx context.Context, account, accountType, code string) error
+
+	// UpdateAvatar 更新用户头像
+	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 }
 
 // 注册参数

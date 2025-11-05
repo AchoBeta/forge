@@ -226,3 +226,36 @@ func ResetPassword() gin.HandlerFunc {
 		r.Success(rsp)
 	}
 }
+
+// UpdateAvatar
+//
+//	@Description:[PUT] /api/biz/v1/user/avatar
+//	@return gin.HandlerFunc
+func UpdateAvatar() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		req := &def.UpdateAvatarReq{}
+		ctx := gCtx.Request.Context()
+		if err := gCtx.ShouldBindJSON(req); err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INVALID_PARAMS.Code,
+				Message: response.INVALID_PARAMS.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
+			})
+			return
+		}
+
+		rsp, err := handler.GetHandler().UpdateAvatar(ctx, req)
+		r := response.NewResponse(gCtx)
+
+		if err != nil {
+			msgCode := mapServiceErrorToMsgCode(err)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
+			})
+			return
+		}
+		r.Success(rsp)
+	}
+}

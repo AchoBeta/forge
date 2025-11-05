@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net/url"
+	"strings"
 	"time"
 
 	"forge/biz/adapter"
@@ -411,4 +413,133 @@ func generateVerificationCode() string {
 		panic(fmt.Sprintf("failed to generate cryptographically secure random number for verification code: %v", err))
 	}
 	return fmt.Sprintf("%06d", n.Int64())
+}
+
+// UpdateAvatar 更新用户头像
+func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	// 参数校验
+	if userID == "" || avatarURL == "" {
+		zlog.CtxErrorf(ctx, "invalid params for update avatar: userID or avatarURL is empty")
+		return ErrInvalidParams
+	}
+
+	// URL验证
+	if err := validateAvatarURL(ctx, avatarURL, userID); err != nil {
+		zlog.CtxErrorf(ctx, "avatar URL validation failed: %v", err)
+		return ErrInvalidParams
+	}
+
+	// 检查用户是否存在（GetUserByID 包含状态检查）
+	_, err := u.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// 更新头像
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: userID,
+		Avatar: &avatarURL,
+	}
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update avatar failed: %v", err)
+		return ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "update avatar successfully for user: %s", userID)
+	return nil
+}
+
+// validateAvatarURL URL验证函数
+func validateAvatarURL(ctx context.Context, avatarURL, userID string) error {
+	// 1. URL长度限制（防止过长的URL）
+	const maxURLLength = 2048 // RFC 7230 建议的最大URL长度
+	if len(avatarURL) > maxURLLength {
+		return fmt.Errorf("avatar URL too long: exceeds %d characters", maxURLLength)
+	}
+
+	// 2. 使用标准库解析URL
+	parsedURL, err := url.Parse(avatarURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// 3. 验证协议（只允许http和https）
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("invalid URL scheme: only http and https are allowed, got %s", scheme)
+	}
+
+	// 4. 验证Host不为空
+	if parsedURL.Host == "" {
+		return fmt.Errorf("invalid URL: host is required")
+	}
+
+	// 5. 验证Host格式（不能包含危险字符）
+	if strings.Contains(parsedURL.Host, "..") || strings.Contains(parsedURL.Host, "//") {
+		return fmt.Errorf("invalid URL: host contains dangerous characters")
+	}
+
+	// 6. 验证路径不为空
+	if parsedURL.Path == "" || parsedURL.Path == "/" {
+		return fmt.Errorf("invalid URL: path is required")
+	}
+
+	// 7. 验证路径格式（应该符合 user/{userID}/avatar/... 格式）
+	expectedPrefix := fmt.Sprintf("/user/%s/avatar/", userID)
+	if !strings.HasPrefix(parsedURL.Path, expectedPrefix) {
+		return fmt.Errorf("invalid URL path: must start with %s, got %s", expectedPrefix, parsedURL.Path)
+	}
+
+	// 8. 验证路径中不能包含危险字符（防止路径遍历攻击）
+	if strings.Contains(parsedURL.Path, "..") || strings.Contains(parsedURL.Path, "//") {
+		return fmt.Errorf("invalid URL path: contains dangerous characters")
+	}
+
+	// 9. 验证路径中不能包含查询参数和锚点（防止注入攻击）
+	if parsedURL.RawQuery != "" {
+		return fmt.Errorf("invalid URL: query parameters are not allowed")
+	}
+	if parsedURL.Fragment != "" {
+		return fmt.Errorf("invalid URL: fragment is not allowed")
+	}
+
+	// 10. 验证文件名格式（应该是一个有效的文件名）
+	pathParts := strings.Split(parsedURL.Path, "/")
+	if len(pathParts) == 0 {
+		return fmt.Errorf("invalid URL path: empty path segments")
+	}
+	fileName := pathParts[len(pathParts)-1]
+	if fileName == "" {
+		return fmt.Errorf("invalid URL path: filename is required")
+	}
+
+	// 11. 验证文件名不能包含危险字符
+	dangerousChars := []string{"<", ">", "|", "\"", ":", "?", "*", "\\", "\x00"}
+	for _, char := range dangerousChars {
+		if strings.Contains(fileName, char) {
+			return fmt.Errorf("invalid filename: contains dangerous character '%s'", char)
+		}
+	}
+
+	// 12. 验证文件扩展名（只允许图片格式）
+	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	fileNameLower := strings.ToLower(fileName)
+	hasValidExtension := false
+	for _, ext := range allowedExtensions {
+		if strings.HasSuffix(fileNameLower, ext) {
+			hasValidExtension = true
+			break
+		}
+	}
+	if !hasValidExtension {
+		return fmt.Errorf("invalid file extension: only image formats are allowed (jpg, jpeg, png, gif, webp, bmp, svg)")
+	}
+
+	// 13. 验证文件名长度（防止过长的文件名）
+	const maxFileNameLength = 255
+	if len(fileName) > maxFileNameLength {
+		return fmt.Errorf("invalid filename: too long, exceeds %d characters", maxFileNameLength)
+	}
+
+	return nil
 }

@@ -40,7 +40,14 @@ func register() (router *gin.Engine) {
 	gin.SetMode(gin.DebugMode)
 	r := gin.Default()
 	r.RouterGroup = *r.Group("/api/biz/v1", middleware.AddTracer())
-	loadUserService(r.Group("user"))
+
+	// 用户服务：不需要JWT的路由（登录、注册、发送验证码、重置密码）
+	userGroup := r.Group("user")
+	loadUserService(userGroup)
+
+	// 用户服务：需要JWT鉴权的路由（更新头像等）
+	userAuthGroup := r.Group("user", jwtAuthMiddleware)
+	loadUserAuthService(userAuthGroup)
 
 	// mindmap路由组需要JWT鉴权
 	mindMapGroup := r.Group("mindmap", jwtAuthMiddleware)
@@ -83,6 +90,13 @@ func loadUserService(r *gin.RouterGroup) {
 	// 重置密码接口
 	// [POST] /api/biz/v1/user/reset_password
 	r.Handle(POST, "reset_password", ResetPassword())
+}
+
+// loadUserAuthService 加载需要JWT鉴权的用户服务路由
+func loadUserAuthService(r *gin.RouterGroup) {
+	// 更新头像接口
+	// [PUT] /api/biz/v1/user/avatar
+	r.Handle(PUT, "avatar", UpdateAvatar())
 }
 
 func loadMindMapService(r *gin.RouterGroup) {
