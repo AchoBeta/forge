@@ -366,7 +366,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 
 	case types.PurposeResetPassword:
 		// 重置密码场景：账号应该存在，如果不存在则返回错误
-		existingUser, err := u.findUserByAccount(ctx, account, accountType)
+		_, err := u.findUserByAccount(ctx, account, accountType)
 		if err != nil {
 			if errors.Is(err, ErrUserNotFound) {
 				// 用户不存在，返回错误
@@ -377,11 +377,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
 			return ErrInternalError
 		}
-		if existingUser == nil {
-			// 用户不存在，返回错误
-			zlog.CtxWarnf(ctx, "user not found for reset password: %s (type: %s)", account, accountType)
-			return ErrUserNotFound
-		}
+		// err == nil 时，说明用户存在（findUserByAccount 保证）
 
 	case types.PurposeChangeAccount:
 		// 换绑联系方式场景：需要从context获取当前用户，检查新账号是否被其他用户使用
@@ -390,23 +386,8 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 			zlog.CtxErrorf(ctx, "user not found in context for change account")
 			return ErrPermissionDenied
 		}
-		existingUser, err := u.findUserByAccount(ctx, account, accountType)
-		if err != nil {
-			// 如果是用户不存在的错误，说明新账号未被使用，可以继续发送验证码
-			if !errors.Is(err, ErrUserNotFound) {
-				// 其他错误（数据库错误等），返回内部错误
-				zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
-				return ErrInternalError
-			}
-			// ErrUserNotFound 表示新账号未被使用，可以继续
-		} else if existingUser != nil {
-			// 新账号已被使用，检查是否是当前用户自己的账号
-			if existingUser.UserID != currentUser.UserID {
-				// 被其他用户使用，返回错误
-				zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
-				return ErrAccountAlreadyInUse
-			}
-			// 是自己的账号，可以继续（允许用户重新验证自己的账号）
+		if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, account, accountType); err != nil {
+			return err
 		}
 
 	default:
@@ -483,6 +464,34 @@ func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, 
 	return nil
 }
 
+// checkAccountAvailabilityForUpdate 检查账号是否可用于更新（换绑/绑定）
+// 检查新账号是否被其他用户使用，如果是当前用户自己的账号则允许
+func (u *UserServiceImpl) checkAccountAvailabilityForUpdate(ctx context.Context, currentUser *entity.User, account, accountType string) error {
+	existingUser, err := u.findUserByAccount(ctx, account, accountType)
+	if err != nil {
+		// 如果是用户不存在的错误，说明新账号未被使用，可以继续
+		if !errors.Is(err, ErrUserNotFound) {
+			// 其他错误（数据库错误等），返回内部错误
+			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+			return ErrInternalError
+		}
+		// ErrUserNotFound 表示新账号未被使用，可以继续
+		return nil
+	}
+
+	// 找到用户，检查是否是当前用户自己的账号
+	if existingUser != nil {
+		if existingUser.UserID != currentUser.UserID {
+			// 被其他用户使用，返回错误
+			zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
+			return ErrAccountAlreadyInUse
+		}
+		// 是自己的账号，可以继续（允许用户重新验证自己的账号）
+	}
+
+	return nil
+}
+
 // UpdateAccount 更新联系方式（绑定/换绑手机号或邮箱）
 func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAccountParams) (string, error) {
 	// 参数校验
@@ -515,23 +524,8 @@ func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAc
 	}
 
 	// 检查新联系方式是否被其他用户使用
-	existingUser, err := u.findUserByAccount(ctx, req.Account, req.AccountType)
-	if err != nil {
-		// 如果是用户不存在的错误，说明新联系方式未被使用，可以继续
-		if !errors.Is(err, ErrUserNotFound) {
-			// 其他错误（数据库错误等），返回内部错误
-			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
-			return "", ErrInternalError
-		}
-		// ErrUserNotFound 表示新联系方式未被使用，可以继续
-	} else if existingUser != nil {
-		// 新联系方式已被使用，检查是否是当前用户自己的联系方式
-		if existingUser.UserID != currentUser.UserID {
-			// 被其他用户使用，返回错误
-			zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", req.Account, req.AccountType)
-			return "", ErrAccountAlreadyInUse
-		}
-		// 是自己的联系方式，可以继续（允许用户重新验证自己的联系方式）
+	if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, req.Account, req.AccountType); err != nil {
+		return "", err
 	}
 
 	// 准备更新信息
@@ -541,13 +535,14 @@ func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAc
 
 	// 更新联系方式
 	trueValue := true
-	if req.AccountType == types.AccountTypePhone {
+	switch req.AccountType {
+	case types.AccountTypePhone:
 		updateInfo.Phone = &req.Account
 		updateInfo.PhoneVerified = &trueValue
-	} else if req.AccountType == types.AccountTypeEmail {
+	case types.AccountTypeEmail:
 		updateInfo.Email = &req.Account
 		updateInfo.EmailVerified = &trueValue
-	} else {
+	default:
 		zlog.CtxErrorf(ctx, "unsupported account type: %s", req.AccountType)
 		return "", ErrUnsupportedAccountType
 	}
