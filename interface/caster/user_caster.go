@@ -101,3 +101,16 @@ func CastResetPasswordReq2Params(req *def.ResetPasswordReq) *types.ResetPassword
 		ConfirmPassword: req.ConfirmPassword,
 	}
 }
+
+// CastUpdateAccountReq2Params： DTO -> Service 层参数表单转换
+func CastUpdateAccountReq2Params(req *def.UpdateAccountReq) *types.UpdateAccountParams {
+	if req == nil {
+		return nil
+	}
+	return &types.UpdateAccountParams{
+		Account:     req.Account,
+		AccountType: req.AccountType,
+		Code:        req.Code,
+		Password:    req.Password,
+	}
+}

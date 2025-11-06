@@ -4,6 +4,8 @@ import (
 	"context"
 
 	// "forge/constant"
+	"forge/biz/entity"
+	"forge/biz/userservice"
 	"forge/interface/caster"
 	"forge/interface/def"
 	"forge/pkg/log/zlog"
@@ -84,13 +86,60 @@ func (h *Handler) ResetPassword(ctx context.Context, req *def.ResetPasswordReq) 
 
 func (h *Handler) SendCode(ctx context.Context, req *def.SendVerificationCodeReq) (rsp *def.SendVerificationCodeResp, err error) {
 	// 调用服务层发送验证码
-	err = h.UserService.SendVerificationCode(ctx, req.Account, req.AccountType)
+	err = h.UserService.SendVerificationCode(ctx, req.Account, req.AccountType, req.Purpose)
 	if err != nil {
 		return nil, err
 	}
 
 	rsp = &def.SendVerificationCodeResp{
 		Success: true,
+	}
+	return rsp, nil
+}
+
+func (h *Handler) GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error) {
+	defer func() {
+		zlog.CtxAllInOne(ctx, "handler.get_home", nil, rsp, err)
+	}()
+
+	// 从context获取当前用户（JWT中间件已注入）
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
+		return nil, userservice.ErrPermissionDenied
+	}
+
+	// 判断是否有密码
+	hasPassword := user.Password != ""
+
+	// 组装响应
+	rsp = &def.GetHomeResp{
+		UserName:    user.UserName,
+		Avatar:      user.Avatar,
+		Phone:       user.Phone,
+		Email:       user.Email,
+		HasPassword: hasPassword,
+	}
+	return rsp, nil
+}
+
+func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) (rsp *def.UpdateAccountResp, err error) {
+	defer func() {
+		zlog.CtxAllInOne(ctx, "handler.update_account", req, rsp, err)
+	}()
+
+	// DTO -> Service 层参数转换
+	params := caster.CastUpdateAccountReq2Params(req)
+
+	// 调用服务层更新联系方式
+	account, err := h.UserService.UpdateAccount(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	rsp = &def.UpdateAccountResp{
+		Success: true,
+		Account: account,
 	}
 	return rsp, nil
 }
