@@ -41,6 +41,11 @@ var (
 	ErrPermissionDenied = errors.New("permission denied")
 	// ErrVerificationCodeIncorrect 表示验证码错误
 	ErrVerificationCodeIncorrect = errors.New("verification code incorrect")
+	// ErrAccountAlreadyInUse 表示账号（手机号/邮箱）已被使用
+	ErrAccountAlreadyInUse = errors.New("account already in use")
+	ErrEmailAlreadyInUse   = ErrAccountAlreadyInUse
+	// ErrPasswordRequired 表示密码必填
+	ErrPasswordRequired = errors.New("password required")
 )
 
 // 最好的设计方案：
@@ -197,10 +202,11 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		Password: hash,
 		// 根据 accountType 填写登录方式字段
 	}
-	if req.AccountType == types.AccountTypePhone {
+	switch req.AccountType {
+	case types.AccountTypePhone:
 		user.Phone = req.Account
 		user.PhoneVerified = true
-	} else if req.AccountType == types.AccountTypeEmail {
+	case types.AccountTypeEmail:
 		user.Email = req.Account
 		user.EmailVerified = true
 	}
@@ -336,17 +342,63 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 }
 
 // SendVerificationCode 发送验证码
-func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType string) error {
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) error {
 	// 参数校验
 	if account == "" || accountType == "" {
 		zlog.CtxErrorf(ctx, "invalid params for send verification code")
 		return ErrInvalidParams
 	}
 
-	// 目前只支持邮箱验证码
-	if accountType != types.AccountTypeEmail {
-		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
-		return ErrUnsupportedAccountType
+	// 根据使用场景进行账号验证
+	// 注册 换绑需要提供未被使用的账号   重置密码需要提供用户自己的 存在的账号
+	switch purpose {
+	case types.PurposeRegister:
+		// 注册场景：账号应该不存在，如果已存在则返回错误
+		_, err := u.findUserByAccount(ctx, account, accountType)
+		if err != nil {
+			// 如果是用户不存在的错误，说明账号未被使用，可以继续发送验证码
+			if !errors.Is(err, ErrUserNotFound) {
+				// 其他错误（数据库错误等），返回内部错误
+				zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+				return ErrInternalError
+			}
+			// ErrUserNotFound 表示账号未被使用，可以继续
+		} else {
+			// 账号已被使用，返回错误
+			// 当 err == nil 时，说明找到了用户（findUserByAccount 保证）
+			zlog.CtxWarnf(ctx, "account already in use for register: %s (type: %s)", account, accountType)
+			return ErrAccountAlreadyInUse
+		}
+
+	case types.PurposeResetPassword:
+		// 重置密码场景：账号应该存在，如果不存在则返回错误
+		_, err := u.findUserByAccount(ctx, account, accountType)
+		if err != nil {
+			if errors.Is(err, ErrUserNotFound) {
+				// 用户不存在，返回错误
+				zlog.CtxWarnf(ctx, "user not found for reset password: %s (type: %s)", account, accountType)
+				return ErrUserNotFound
+			}
+			// 其他错误（数据库错误等），返回内部错误
+			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+			return ErrInternalError
+		}
+		// err == nil 时，说明用户存在（findUserByAccount 保证）
+
+	case types.PurposeChangeAccount:
+		// 换绑联系方式场景：需要从context获取当前用户，检查新账号是否被其他用户使用
+		currentUser, ok := entity.GetUser(ctx)
+		if !ok {
+			zlog.CtxErrorf(ctx, "user not found in context for change account")
+			return ErrPermissionDenied
+		}
+		if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, account, accountType); err != nil {
+			return err
+		}
+
+	default:
+		// 未指定场景或未知场景，不进行验证（向后兼容）
+		zlog.CtxWarnf(ctx, "unknown purpose for send verification code: %s, skipping validation", purpose)
 	}
 
 	// 生成6位随机验证码
@@ -360,14 +412,26 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
 		return ErrInternalError
 	}
-	// 发送邮件
-	if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
-		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
-		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
-		if delErr := cache.DelRedis(ctx, key); delErr != nil {
-			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+
+	// 根据账号类型发送验证码
+	switch accountType {
+	case types.AccountTypeEmail:
+		// 发送邮件
+		if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
+			zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
+			// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
+			if delErr := cache.DelRedis(ctx, key); delErr != nil {
+				zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+			}
+			return ErrInternalError
 		}
-		return ErrInternalError
+
+	case types.AccountTypePhone:
+		// 手机号 发短信
+
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
+		return ErrUnsupportedAccountType
 	}
 
 	return nil
@@ -404,6 +468,115 @@ func (u *UserServiceImpl) VerifyCode(ctx context.Context, account, accountType, 
 	}
 
 	return nil
+}
+
+// checkAccountAvailabilityForUpdate 检查账号是否可用于更新（换绑/绑定）
+// 检查新账号是否被其他用户使用，如果是当前用户自己的账号则允许
+func (u *UserServiceImpl) checkAccountAvailabilityForUpdate(ctx context.Context, currentUser *entity.User, account, accountType string) error {
+	existingUser, err := u.findUserByAccount(ctx, account, accountType)
+	if err != nil {
+		// 如果是用户不存在的错误，说明新账号未被使用，可以继续
+		if !errors.Is(err, ErrUserNotFound) {
+			// 其他错误（数据库错误等），返回内部错误
+			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+			return ErrInternalError
+		}
+		// ErrUserNotFound 表示新账号未被使用，可以继续
+		return nil
+	}
+
+	// 找到用户，检查是否是当前用户自己的账号
+	// 当 err == nil 时，existingUser 一定不为 nil（findUserByAccount 保证）
+	if existingUser.UserID != currentUser.UserID {
+		// 被其他用户使用，返回错误
+		zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
+		return ErrAccountAlreadyInUse
+	}
+	// 是自己的账号，可以继续（允许用户重新验证自己的账号）
+
+	return nil
+}
+
+// UpdateAccount 更新联系方式（绑定/换绑手机号或邮箱）
+func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAccountParams) (string, error) {
+	// 参数校验
+	if req == nil {
+		zlog.CtxErrorf(ctx, "update account request is nil")
+		return "", ErrInvalidParams
+	}
+	if req.Account == "" || req.AccountType == "" || req.Code == "" {
+		zlog.CtxErrorf(ctx, "invalid params for update account: missing required fields")
+		return "", ErrInvalidParams
+	}
+
+	// 从context获取当前用户（JWT中间件已注入）
+	currentUser, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
+		return "", ErrPermissionDenied
+	}
+
+	// 判断用户是否有密码
+	hasPassword := currentUser.Password != ""
+	if !hasPassword && req.Password == "" {
+		zlog.CtxErrorf(ctx, "password required for user without password: %s", currentUser.UserID)
+		return "", ErrPasswordRequired
+	}
+
+	// 验证验证码（验证发送到新联系方式的验证码）
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+		return "", err
+	}
+
+	// 检查新联系方式是否被其他用户使用
+	if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, req.Account, req.AccountType); err != nil {
+		return "", err
+	}
+
+	// 准备更新信息
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: currentUser.UserID,
+	}
+
+	// 更新联系方式
+	trueValue := true
+	switch req.AccountType {
+	case types.AccountTypePhone:
+		updateInfo.Phone = &req.Account
+		updateInfo.PhoneVerified = &trueValue
+	case types.AccountTypeEmail:
+		updateInfo.Email = &req.Account
+		updateInfo.EmailVerified = &trueValue
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type: %s", req.AccountType)
+		return "", ErrUnsupportedAccountType
+	}
+
+	// 如果传了密码，更新密码
+	if req.Password != "" {
+		// 验证密码强度
+		if err := util.ValidatePasswordStrength(req.Password); err != nil {
+			zlog.CtxErrorf(ctx, "password strength validation failed: %v", err)
+			return "", err
+		}
+
+		// 加密密码
+		hash, err := util.HashPassword(req.Password)
+		if err != nil {
+			zlog.CtxErrorf(ctx, "hash password failed: %v", err)
+			return "", ErrInternalError
+		}
+		updateInfo.Password = &hash
+	}
+
+	// 更新用户信息
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update account failed: %v", err)
+		return "", ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "account updated successfully, userID: %s, new account: %s", currentUser.UserID, req.Account)
+	return req.Account, nil
 }
 
 // generateVerificationCode 生成6位随机验证码

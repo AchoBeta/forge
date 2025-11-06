@@ -27,6 +27,21 @@ import (
 // 因为解耦的缘故，框架层面的更换不会对内部代码造成任何影响
 // router 与hander 应该是一个一对一的关系，有可能会有多对一的关系
 
+// handleHandlerResponse 统一处理 handler 的响应和错误
+func handleHandlerResponse(gCtx *gin.Context, rsp interface{}, err error, emptyResp interface{}) {
+	r := response.NewResponse(gCtx)
+	if err != nil {
+		msgCode := mapServiceErrorToMsgCode(err)
+		gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+			Code:    msgCode.Code,
+			Message: msgCode.Msg,
+			Data:    emptyResp,
+		})
+		return
+	}
+	r.Success(rsp)
+}
+
 // abortWithError 辅助函数：封装错误响应逻辑，减少代码重复
 func abortWithError(gCtx *gin.Context, ctx context.Context, msgCode response.MsgCode, err error) {
 	logMsg := err.Error()
@@ -57,6 +72,14 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 		return response.USER_ACCOUNT_ALREADY_EXIST
 	}
 
+	if errors.Is(err, userservice.ErrAccountAlreadyInUse) {
+		return response.ACCOUNT_ALREADY_IN_USE
+	}
+
+	if errors.Is(err, userservice.ErrPasswordRequired) {
+		return response.PASSWORD_REQUIRED
+	}
+
 	if errors.Is(err, userservice.ErrInvalidParams) {
 		return response.PARAM_NOT_VALID
 	}
@@ -75,6 +98,10 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 
 	if errors.Is(err, userservice.ErrInternalError) {
 		return response.INTERNAL_ERROR
+	}
+
+	if errors.Is(err, userservice.ErrPermissionDenied) {
+		return response.INSUFFICENT_PERMISSIONS
 	}
 
 	// 验证码错误
@@ -133,23 +160,8 @@ func Login() gin.HandlerFunc {
 		// loop.SetSpanAllInOne(ctx, sp, req, rsp, err)
 		zlog.CtxAllInOne(ctx, "login", req, rsp, err)
 
-		// 语法糖包装
-		r := response.NewResponse(gCtx)
-		if err != nil {
-			// 这里是随便写的一个错误码，实际错误码会更加复杂，如何设计更加优雅？
-			// 一个handler会返回错误码的
-			// r.Error(response.USER_NOT_LOGIN) // todo开放性问题，如何借助 errors.wrap 和errors.Is来更优雅返回msgcode
-			// 根据错误类型返回更具体的错误码
-			msgCode := mapServiceErrorToMsgCode(err)
-			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
-				Code:    msgCode.Code,
-				Message: msgCode.Msg,
-				Data:    def.LoginResp{Success: false},
-			})
-			return
-		} else {
-			r.Success(rsp)
-		}
+		// 统一处理响应和错误
+		handleHandlerResponse(gCtx, rsp, err, def.LoginResp{Success: false})
 	}
 }
 
@@ -172,19 +184,7 @@ func Register() gin.HandlerFunc {
 		}
 
 		rsp, err := handler.GetHandler().Register(ctx, req)
-		r := response.NewResponse(gCtx)
-
-		if err != nil {
-			// 根据 err 的类型返回更具体的错误码
-			msgCode := mapServiceErrorToMsgCode(err)
-			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
-				Code:    msgCode.Code,
-				Message: msgCode.Msg,
-				Data:    def.RegisterResp{Success: false},
-			})
-			return
-		}
-		r.Success(rsp)
+		handleHandlerResponse(gCtx, rsp, err, def.RegisterResp{Success: false})
 	}
 }
 
@@ -207,19 +207,7 @@ func SendCode() gin.HandlerFunc {
 		}
 
 		rsp, err := handler.GetHandler().SendCode(ctx, req)
-		r := response.NewResponse(gCtx)
-
-		if err != nil {
-			// 根据服务层返回的错误类型，返回给客户端更精确的错误信息
-			msgCode := mapServiceErrorToMsgCode(err)
-			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
-				Code:    msgCode.Code,
-				Message: msgCode.Msg,
-				Data:    def.SendVerificationCodeResp{Success: false},
-			})
-			return
-		}
-		r.Success(rsp)
+		handleHandlerResponse(gCtx, rsp, err, def.SendVerificationCodeResp{Success: false})
 	}
 }
 
@@ -242,19 +230,43 @@ func ResetPassword() gin.HandlerFunc {
 		}
 
 		rsp, err := handler.GetHandler().ResetPassword(ctx, req)
-		r := response.NewResponse(gCtx)
+		handleHandlerResponse(gCtx, rsp, err, def.ResetPasswordResp{Success: false})
+	}
+}
 
-		if err != nil {
-			// 根据服务层返回的错误类型，返回给客户端更精确的错误信息
-			msgCode := mapServiceErrorToMsgCode(err)
+// GetHome
+//
+//	@Description:[GET] /api/biz/v1/user/home
+//	@return gin.HandlerFunc
+func GetHome() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		ctx := gCtx.Request.Context()
+
+		rsp, err := handler.GetHandler().GetHome(ctx)
+		handleHandlerResponse(gCtx, rsp, err, def.GetHomeResp{})
+	}
+}
+
+// UpdateAccount
+//
+//	@Description:[POST] /api/biz/v1/user/account
+//	@return gin.HandlerFunc
+func UpdateAccount() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		req := &def.UpdateAccountReq{}
+		ctx := gCtx.Request.Context()
+
+		if err := gCtx.ShouldBindJSON(req); err != nil {
 			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
-				Code:    msgCode.Code,
-				Message: msgCode.Msg,
-				Data:    def.ResetPasswordResp{Success: false},
+				Code:    response.INVALID_PARAMS.Code,
+				Message: response.INVALID_PARAMS.Msg,
+				Data:    def.UpdateAccountResp{Success: false},
 			})
 			return
 		}
-		r.Success(rsp)
+
+		rsp, err := handler.GetHandler().UpdateAccount(ctx, req)
+		handleHandlerResponse(gCtx, rsp, err, def.UpdateAccountResp{Success: false})
 	}
 }
 
