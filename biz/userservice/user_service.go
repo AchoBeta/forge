@@ -354,7 +354,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 	switch purpose {
 	case types.PurposeRegister:
 		// 注册场景：账号应该不存在，如果已存在则返回错误
-		existingUser, err := u.findUserByAccount(ctx, account, accountType)
+		_, err := u.findUserByAccount(ctx, account, accountType)
 		if err != nil {
 			// 如果是用户不存在的错误，说明账号未被使用，可以继续发送验证码
 			if !errors.Is(err, ErrUserNotFound) {
@@ -363,8 +363,9 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 				return ErrInternalError
 			}
 			// ErrUserNotFound 表示账号未被使用，可以继续
-		} else if existingUser != nil {
+		} else {
 			// 账号已被使用，返回错误
+			// 当 err == nil 时，说明找到了用户（findUserByAccount 保证）
 			zlog.CtxWarnf(ctx, "account already in use for register: %s (type: %s)", account, accountType)
 			return ErrAccountAlreadyInUse
 		}
@@ -485,14 +486,13 @@ func (u *UserServiceImpl) checkAccountAvailabilityForUpdate(ctx context.Context,
 	}
 
 	// 找到用户，检查是否是当前用户自己的账号
-	if existingUser != nil {
-		if existingUser.UserID != currentUser.UserID {
-			// 被其他用户使用，返回错误
-			zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
-			return ErrAccountAlreadyInUse
-		}
-		// 是自己的账号，可以继续（允许用户重新验证自己的账号）
+	// 当 err == nil 时，existingUser 一定不为 nil（findUserByAccount 保证）
+	if existingUser.UserID != currentUser.UserID {
+		// 被其他用户使用，返回错误
+		zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
+		return ErrAccountAlreadyInUse
 	}
+	// 是自己的账号，可以继续（允许用户重新验证自己的账号）
 
 	return nil
 }

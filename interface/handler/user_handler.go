@@ -119,7 +119,6 @@ func (h *Handler) GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error)
 	return rsp, nil
 }
 
-
 func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) (rsp *def.UpdateAccountResp, err error) {
 	defer func() {
 		zlog.CtxAllInOne(ctx, "handler.update_account", req, rsp, err)
@@ -137,7 +136,7 @@ func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) 
 	rsp = &def.UpdateAccountResp{
 		Success: true,
 		Account: account,
-  }
+	}
 	return rsp, nil
 }
 
