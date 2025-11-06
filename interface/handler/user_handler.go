@@ -52,11 +52,7 @@ func (h *Handler) Register(ctx context.Context, req *def.RegisterReq) (rsp *def.
 	// DTO -> Service 层表单
 	params := caster.CastRegisterReq2Params(req)
 
-	// 请求限流、验证验证码等 占位
-
-	// -------------------------
-
-	// 向下调用服务层
+	// 向下调用服务层（验证码验证在 service 层完成）
 	_, err = h.UserService.Register(ctx, params)
 	if err != nil {
 		return nil, err
@@ -72,7 +68,7 @@ func (h *Handler) ResetPassword(ctx context.Context, req *def.ResetPasswordReq) 
 	// DTO -> Service 层表单
 	params := caster.CastResetPasswordReq2Params(req)
 
-	// 向下调用服务层 重置密码函数
+	// 向下调用服务层（验证码验证在 service 层完成）
 	err = h.UserService.ResetPassword(ctx, params)
 	if err != nil {
 		return nil, err
@@ -123,6 +119,7 @@ func (h *Handler) GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error)
 	return rsp, nil
 }
 
+
 func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) (rsp *def.UpdateAccountResp, err error) {
 	defer func() {
 		zlog.CtxAllInOne(ctx, "handler.update_account", req, rsp, err)
@@ -140,6 +137,49 @@ func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) 
 	rsp = &def.UpdateAccountResp{
 		Success: true,
 		Account: account,
+  }
+	return rsp, nil
+}
+
+func (h *Handler) UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (rsp *def.UpdateAvatarResp, err error) {
+	defer func() {
+		zlog.CtxAllInOne(ctx, "handler.update_avatar", req, rsp, err)
+	}()
+
+	// 从context中获取用户信息（JWT中间件已注入）
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
+		return nil, userservice.ErrInternalError
+	}
+
+	// 参数校验
+	if len(req.FileData) == 0 {
+		zlog.CtxErrorf(ctx, "file data is empty")
+		return nil, userservice.ErrInvalidParams
+	}
+	if req.Filename == "" {
+		zlog.CtxErrorf(ctx, "filename is empty")
+		return nil, userservice.ErrInvalidParams
+	}
+
+	// 调用COS服务上传头像
+	avatarURL, err := h.COSService.UploadAvatar(ctx, user.UserID, req.FileData, req.Filename)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to upload avatar to COS: %v", err)
+		return nil, err
+	}
+
+	// 调用用户服务更新头像URL
+	err = h.UserService.UpdateAvatar(ctx, user.UserID, avatarURL)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to update avatar in database: %v", err)
+		return nil, err
+	}
+
+	rsp = &def.UpdateAvatarResp{
+		AvatarURL: avatarURL,
+		Success:   true,
 	}
 	return rsp, nil
 }

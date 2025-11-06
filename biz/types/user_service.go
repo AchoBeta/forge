@@ -23,6 +23,12 @@ type IUserService interface {
 
 	// UpdateAccount 更新联系方式（绑定/换绑手机号或邮箱）
 	UpdateAccount(ctx context.Context, req *UpdateAccountParams) (string, error)
+
+	// VerifyCode 验证验证码
+	VerifyCode(ctx context.Context, account, accountType, code string) error
+
+	// UpdateAvatar 更新用户头像
+	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
 }
 
 // 注册参数

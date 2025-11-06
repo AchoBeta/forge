@@ -1,31 +1,51 @@
 package cos
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"forge/biz/adapter"
 	"forge/infra/configs"
 	"forge/pkg/log/zlog"
+	"net/http"
+	"net/url"
 
+	"github.com/tencentyun/cos-go-sdk-v5"
 	sts "github.com/tencentyun/qcloud-cos-sts-sdk/go"
 )
 
 type cosServiceImpl struct {
-	config configs.COSConfig
-	client *sts.Client
+	config    configs.COSConfig
+	stsClient *sts.Client // 老大原先的 用于获取临时凭证
+	cosClient *cos.Client // COS上传客户端
 }
 
 // NewCOSService 创建COS服务实例（依赖注入模式）
 // 通过构造函数接收配置，返回接口类型，便于测试和依赖注入
 func NewCOSService(cfg configs.COSConfig) adapter.COSService {
-	client := sts.NewClient(
+	stsClient := sts.NewClient(
 		cfg.SecretID,
 		cfg.SecretKey,
 		nil,
 	)
 
+	// 创建COS上传客户端
+	bucketURL, err := url.Parse(fmt.Sprintf("https://%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.Region))
+	if err != nil {
+		zlog.Errorf("invalid bucket URL: %v", err)
+		panic(fmt.Sprintf("invalid bucket URL: %v", err))
+	}
+	cosClient := cos.NewClient(&cos.BaseURL{BucketURL: bucketURL}, &http.Client{
+		Transport: &cos.AuthorizationTransport{
+			SecretID:  cfg.SecretID,
+			SecretKey: cfg.SecretKey,
+		},
+	})
+
 	service := &cosServiceImpl{
-		config: cfg,
-		client: client,
+		config:    cfg,
+		stsClient: stsClient,
+		cosClient: cosClient,
 	}
 
 	zlog.Infof("COS service created successfully, region: %s, bucket: %s", cfg.Region, cfg.Bucket)
@@ -94,10 +114,36 @@ func (c *cosServiceImpl) GetTemporaryCredentials(resourcePath string, durationSe
 	}
 
 	// 请求临时凭证
-	result, err := c.client.GetCredential(opt)
+	result, err := c.stsClient.GetCredential(opt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get COS STS credentials: %w", err)
 	}
 
 	return result, nil
+}
+
+// UploadFile 上传文件到COS
+func (c *cosServiceImpl) UploadFile(ctx context.Context, resourcePath string, fileData []byte, contentType string) (string, error) {
+	// 上传文件
+	opt := &cos.ObjectPutOptions{
+		ObjectPutHeaderOptions: &cos.ObjectPutHeaderOptions{
+			ContentType: contentType,
+		},
+	}
+
+	_, err := c.cosClient.Object.Put(ctx, resourcePath, bytes.NewReader(fileData), opt)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to upload file to COS: %v", err)
+		return "", fmt.Errorf("failed to upload file to COS: %w", err)
+	}
+
+	// 构建完整URL（使用url.JoinPath正确处理URL拼接，避免双斜杠问题）
+	fullURL, err := url.JoinPath(c.config.BaseURL, resourcePath)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to construct file URL: %v", err)
+		return "", fmt.Errorf("failed to construct file URL: %w", err)
+	}
+
+	zlog.CtxInfof(ctx, "file uploaded successfully to COS, path: %s", resourcePath)
+	return fullURL, nil
 }

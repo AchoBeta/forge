@@ -6,6 +6,10 @@ import (
 
 type ICOSService interface {
 	GetOSSCredentials(ctx context.Context, req *GetOSSCredentialsParams) (*OSSCredentials, error)
+
+	// UploadAvatar 上传用户头像
+	// 返回: 上传后的完整URL
+	UploadAvatar(ctx context.Context, userID string, fileData []byte, filename string) (string, error)
 }
 
 // GetOSSCredentialsParams 获取OSS凭证参数

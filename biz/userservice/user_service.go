@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 
 	"forge/biz/adapter"
@@ -165,7 +169,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	}
 
 	// 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return nil, err
 	}
 
@@ -273,8 +277,8 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 		return err
 	}
 
-	// 4. 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	// 校验验证码 code（短信/邮箱）
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return err
 	}
 
@@ -432,7 +436,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 }
 
 // VerifyCode 校验验证码
-func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code string) error {
+func (u *UserServiceImpl) VerifyCode(ctx context.Context, account, accountType, code string) error {
 	if account == "" || code == "" {
 		return ErrInvalidParams
 	}
@@ -583,4 +587,238 @@ func generateVerificationCode() string {
 		panic(fmt.Sprintf("failed to generate cryptographically secure random number for verification code: %v", err))
 	}
 	return fmt.Sprintf("%06d", n.Int64())
+}
+
+// UpdateAvatar 更新用户头像
+func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	// 参数校验
+	if userID == "" || avatarURL == "" {
+		zlog.CtxErrorf(ctx, "invalid params for update avatar: userID or avatarURL is empty")
+		return ErrInvalidParams
+	}
+
+	// URL验证
+	if err := validateAvatarURL(ctx, avatarURL); err != nil {
+		zlog.CtxErrorf(ctx, "avatar URL validation failed: %v", err)
+		// 包装错误以保留详细验证信息，同时仍可用 errors.Is 检查错误类型
+		return fmt.Errorf("%w: %v", ErrInvalidParams, err) // 保留详细错误
+	}
+
+	// 检查用户是否存在（GetUserByID 包含状态检查）
+	_, err := u.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// 更新头像
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: userID,
+		Avatar: &avatarURL,
+	}
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update avatar failed: %v", err)
+		return ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "update avatar successfully for user: %s", userID)
+	return nil
+}
+
+// validateAvatarURL URL验证函数
+// 注意：移除了路径格式强制检查（原 /user/{userID}/avatar/），允许使用外部服务
+// 如果需要对自有存储路径进行限制，应该在存储访问层（COS IAM策略）实现
+func validateAvatarURL(ctx context.Context, avatarURL string) error {
+	// 1. URL长度限制（防止过长的URL）
+	const maxURLLength = 2048 // RFC 7230 建议的最大URL长度
+	if len(avatarURL) > maxURLLength {
+		return fmt.Errorf("avatar URL too long: exceeds %d characters", maxURLLength)
+	}
+
+	// 2. 使用标准库解析URL
+	parsedURL, err := url.Parse(avatarURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// 3. 验证协议（只允许http和https）
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("invalid URL scheme: only http and https are allowed, got %s", scheme)
+	}
+
+	// 4. 验证Host不为空
+	if parsedURL.Host == "" {
+		return fmt.Errorf("invalid URL: host is required")
+	}
+
+	// 5. 验证Host格式（不能包含危险字符）
+	// 注意：移除了对 ".." 的检查，因为主机名中的 ".." 不是安全问题（路径遍历发生在路径部分）
+	// 虽然 url.Parse 通常会处理 "//"，但保留检查以防格式错误
+	if strings.Contains(parsedURL.Host, "//") {
+		return fmt.Errorf("invalid URL: host contains invalid characters")
+	}
+
+	// 6. SSRF 防护：禁止访问内网/私有IP地址
+	// 使用 Hostname() 方法提取主机名，自动处理端口和 IPv6 方括号
+	host := parsedURL.Hostname()
+
+	// 解析 IP 地址
+	ip := net.ParseIP(host)
+	if ip != nil {
+		// 如果是 IP 地址，检查是否为私有/保留地址
+		if isPrivateIP(ip) {
+			return fmt.Errorf("invalid URL: private/internal IP addresses are not allowed for security reasons")
+		}
+	} else {
+		// 如果是域名，解析为 IP 并检查
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			// 域名解析失败，拒绝URL（可能是恶意域名或网络问题）
+			zlog.CtxErrorf(ctx, "failed to resolve host %s: %v", host, err)
+			return fmt.Errorf("invalid URL: failed to resolve host %s", host)
+		}
+
+		// 检查所有解析出的 IP 地址
+		if len(ips) == 0 {
+			return fmt.Errorf("invalid URL: host %s resolves to no IP addresses", host)
+		}
+
+		for _, resolvedIP := range ips {
+			if isPrivateIP(resolvedIP) {
+				return fmt.Errorf("invalid URL: host %s resolves to private/internal IP address", host)
+			}
+		}
+	}
+
+	// 7. 验证路径中不能包含危险字符（防止路径遍历攻击）
+	if strings.Contains(parsedURL.Path, "..") || strings.Contains(parsedURL.Path, "//") {
+		return fmt.Errorf("invalid URL path: contains dangerous characters")
+	}
+
+	// 8. 允许查询参数（外部服务如 Gravatar、CDN 需要查询参数）
+	// 但禁止锚点（Fragment），因为锚点不会发送到服务器
+	if parsedURL.Fragment != "" {
+		return fmt.Errorf("invalid URL: fragment is not allowed")
+	}
+
+	// 9. 验证URL路径或查询参数中是否包含图片格式标识
+	// 支持多种常见格式：
+	// - 直接路径：https://example.com/avatar.jpg
+	// - 查询参数：https://gravatar.com/avatar/xxx?s=200&d=identicon
+	// - 路径+查询：https://cdn.example.com/user123.jpg?width=200
+
+	// 从路径中提取可能的文件名
+	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	var fileName string
+	if len(pathParts) > 0 {
+		fileName = pathParts[len(pathParts)-1]
+	}
+
+	// 检查路径中的文件扩展名
+	hasValidExtension := false
+	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	// 允许的图片格式（不带点，用于查询参数）- 从allowedExtensions自动生成，避免重复维护
+	validImageFormats := make([]string, len(allowedExtensions))
+	for i, ext := range allowedExtensions {
+		validImageFormats[i] = strings.TrimPrefix(ext, ".")
+	}
+
+	if fileName != "" {
+		// 使用 path.Ext 提取真正的文件扩展名，避免被恶意文件名绕过（如 avatar.jpg.exe）
+		fileExt := strings.ToLower(path.Ext(fileName))
+		for _, ext := range allowedExtensions {
+			if fileExt == ext {
+				hasValidExtension = true
+				break
+			}
+		}
+	}
+
+	// 如果路径中没有有效的扩展名，检查查询参数中是否有图片相关的标识
+	// 例如：?format=png, ?type=image 等（某些服务使用查询参数指定格式）
+	if !hasValidExtension && parsedURL.RawQuery != "" {
+		// 解析查询参数，避免误判（如 ?some_other_param=format=png 不应该被识别）
+		// url.Values.Get() 只返回指定键的值，不会因为参数值中包含字符串而误判
+		query := parsedURL.Query()
+
+		// 检查 format 参数（如 ?format=png）
+		if format := strings.ToLower(query.Get("format")); format != "" {
+			for _, validFormat := range validImageFormats {
+				if format == validFormat {
+					hasValidExtension = true
+					break
+				}
+			}
+		}
+
+		// 检查 type 参数（如 ?type=image）
+		if !hasValidExtension && strings.ToLower(query.Get("type")) == "image" {
+			hasValidExtension = true
+		}
+
+		// 检查 mime 参数（如 ?mime=image/png）
+		if !hasValidExtension && strings.Contains(strings.ToLower(query.Get("mime")), "image") {
+			hasValidExtension = true
+		}
+
+		// 检查 ext 参数（如 ?ext=png）
+		if !hasValidExtension {
+			if ext := strings.ToLower(query.Get("ext")); ext != "" {
+				for _, validExt := range validImageFormats {
+					if ext == validExt {
+						hasValidExtension = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// 如果既没有路径扩展名，也没有查询参数标识，允许通过但记录警告
+	// 因为某些服务可能通过 Content-Type 响应头来标识图片，而不是URL
+	if !hasValidExtension {
+		zlog.CtxWarnf(ctx, "avatar URL does not contain explicit image format identifier: %s", avatarURL)
+		// 不返回错误，允许通过，因为某些合法的图片URL可能没有扩展名
+	}
+
+	// 10. 如果路径中有文件名，验证文件名格式
+	if fileName != "" {
+		// 验证文件名长度（防止过长的文件名）
+		const maxFileNameLength = 255
+		if len(fileName) > maxFileNameLength {
+			return fmt.Errorf("invalid filename: too long, exceeds %d characters", maxFileNameLength)
+		}
+
+		// 验证文件名不能包含明显的危险字符
+		// 注意：这里不禁止 : 和 ?，因为它们可能在合法的URL中出现
+		dangerousChars := []string{"<", ">", "|", "\"", "*", "\\", "\x00"}
+		for _, char := range dangerousChars {
+			if strings.Contains(fileName, char) {
+				return fmt.Errorf("invalid filename: contains dangerous character '%s'", char)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isPrivateIP 检查 IP 地址是否为私有/保留地址（用于 SSRF 防护）
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// 使用标准库函数检查常见的私有/保留地址范围（同时支持 IPv4 和 IPv6）
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() || ip.IsMulticast() {
+		return true
+	}
+
+	// 标准库的 IsUnspecified() 只检查单个地址（0.0.0.0 或 ::），但对于 SSRF 防护，
+	// 我们应该拒绝整个 0.0.0.0/8 范围（0.0.0.0 到 0.255.255.255）
+	if ip4 := ip.To4(); ip4 != nil {
+		return ip4[0] == 0
+	}
+
+	// 对于 IPv6，IsUnspecified() 已足够检查未指定地址（::）
+	return ip.IsUnspecified()
 }
