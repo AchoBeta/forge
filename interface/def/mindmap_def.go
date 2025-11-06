@@ -5,7 +5,7 @@ type CreateMindMapReq struct {
 	Title  string      `json:"title" binding:"required,max=100"`
 	Desc   string      `json:"desc" binding:"max=500"`
 	Layout string      `json:"layout" binding:"required"`
-	Data   MindMapData `json:"data" binding:"required"`
+	Root   MindMapData `json:"root" binding:"required"`
 }
 
 // 列表查询请求
@@ -21,18 +21,19 @@ type UpdateMindMapReq struct {
 	Title  *string      `json:"title,omitempty" binding:"omitempty,max=100"`
 	Desc   *string      `json:"desc,omitempty" binding:"omitempty,max=500"`
 	Layout *string      `json:"layout,omitempty"`
-	Data   *MindMapData `json:"data,omitempty"`
+	Root   *MindMapData `json:"root,omitempty"`
 }
 
 // 思维导图DTO
 type MindMapDTO struct {
-	MapID     string      `json:"map_id"`
+	MapID     string      `json:"mapId"`
+	UserID    string      `json:"userId"`
 	Title     string      `json:"title"`
 	Desc      string      `json:"desc"`
 	Layout    string      `json:"layout"`
-	Data      MindMapData `json:"data"`
-	CreatedAt string      `json:"created_at"`
-	UpdatedAt string      `json:"updated_at"`
+	Root      MindMapData `json:"root"`
+	CreatedAt string      `json:"createdAt,omitempty"`
+	UpdatedAt string      `json:"updatedAt,omitempty"`
 }
 
 // 节点数据DTO
