@@ -14,6 +14,8 @@ type IHandler interface {
 	ResetPassword(ctx context.Context, req *def.ResetPasswordReq) (rsp *def.ResetPasswordResp, err error)
 	// SendCode: 发送验证码  ！邮件！
 	SendCode(ctx context.Context, req *def.SendVerificationCodeReq) (rsp *def.SendVerificationCodeResp, err error)
+	// UpdateAvatar: 更新头像
+	UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (rsp *def.UpdateAvatarResp, err error)
 
 	// MindMap: 思维导图相关接口
 	CreateMindMap(ctx context.Context, req *def.CreateMindMapReq) (rsp *def.CreateMindMapResp, err error)

@@ -1,12 +1,18 @@
 package router
 
 import (
+	"context"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 
+	"forge/biz/cosservice"
 	"forge/biz/userservice"
+
 	// "forge/constant"
 	"forge/interface/def"
 	"forge/interface/handler"
@@ -20,6 +26,20 @@ import (
 // 这里就是gin框架的相关接触代码
 // 因为解耦的缘故，框架层面的更换不会对内部代码造成任何影响
 // router 与hander 应该是一个一对一的关系，有可能会有多对一的关系
+
+// abortWithError 辅助函数：封装错误响应逻辑，减少代码重复
+func abortWithError(gCtx *gin.Context, ctx context.Context, msgCode response.MsgCode, err error) {
+	logMsg := err.Error()
+	if err == nil {
+		logMsg = msgCode.Msg
+	}
+	zlog.CtxErrorf(ctx, "error: %s", logMsg)
+	gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+		Code:    msgCode.Code,
+		Message: msgCode.Msg,
+		Data:    def.UpdateAvatarResp{Success: false},
+	})
+}
 
 // mapServiceErrorToMsgCode 根据应用层返回的错误映射到相应的错误码
 func mapServiceErrorToMsgCode(err error) response.MsgCode {
@@ -71,6 +91,17 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 	}
 	if errors.Is(err, util.ErrPasswordTooLong) {
 		return response.PARAM_NOT_VALID
+	}
+
+	// COS相关错误
+	if errors.Is(err, cosservice.ErrInvalidParams) {
+		return response.PARAM_NOT_VALID
+	}
+	if errors.Is(err, cosservice.ErrPermissionDenied) {
+		return response.INSUFFICENT_PERMISSIONS
+	}
+	if errors.Is(err, cosservice.ErrInternalError) {
+		return response.INTERNAL_FILE_UPLOAD_ERROR
 	}
 
 	// 默认返回通用错误
@@ -220,6 +251,73 @@ func ResetPassword() gin.HandlerFunc {
 				Code:    msgCode.Code,
 				Message: msgCode.Msg,
 				Data:    def.ResetPasswordResp{Success: false},
+			})
+			return
+		}
+		r.Success(rsp)
+	}
+}
+
+// UpdateAvatar
+//
+//	@Description:[POST] /api/biz/v1/user/avatar
+//	@return gin.HandlerFunc
+func UpdateAvatar() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		ctx := gCtx.Request.Context()
+
+		// 设置文件大小限制（8MB）
+		gCtx.Request.ParseMultipartForm(8 << 20)
+
+		// 接收文件
+		file, err := gCtx.FormFile("avatar") // "avatar" 是前端表单字段名
+		if err != nil {
+			// 检查是否是文件大小错误
+			if strings.Contains(err.Error(), "too large") || strings.Contains(err.Error(), "request body too large") {
+				abortWithError(gCtx, ctx, response.PARAM_FILE_SIZE_TOO_BIG, err)
+				return
+			}
+			abortWithError(gCtx, ctx, response.PARAM_NOT_VALID, err)
+			return
+		}
+
+		// 检查文件大小
+		if file.Size > 5*1024*1024 { // 5MB
+			abortWithError(gCtx, ctx, response.PARAM_FILE_SIZE_TOO_BIG, fmt.Errorf("file size too large: %d bytes", file.Size))
+			return
+		}
+
+		// 打开文件
+		src, err := file.Open()
+		if err != nil {
+			abortWithError(gCtx, ctx, response.INTERNAL_FILE_UPLOAD_ERROR, err)
+			return
+		}
+		defer src.Close() // 确保关闭
+
+		// 读取文件内容
+		fileData, err := io.ReadAll(src)
+		if err != nil {
+			abortWithError(gCtx, ctx, response.INTERNAL_FILE_UPLOAD_ERROR, err)
+			return
+		}
+
+		// 构建请求对象
+		req := &def.UpdateAvatarReq{
+			FileData: fileData,
+			Filename: file.Filename,
+		}
+
+		// 调用handler
+		rsp, err := handler.GetHandler().UpdateAvatar(ctx, req)
+		r := response.NewResponse(gCtx)
+
+		if err != nil {
+			msgCode := mapServiceErrorToMsgCode(err)
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.UpdateAvatarResp{Success: false},
 			})
 			return
 		}
