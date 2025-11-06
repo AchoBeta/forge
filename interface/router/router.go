@@ -100,6 +100,10 @@ func loadUserAuthService(r *gin.RouterGroup) {
 	// [GET] /api/biz/v1/user/home
 	r.Handle(GET, "home", GetHome())
 
+	// 发送验证码接口（换绑场景，需要JWT认证）
+	// [POST] /api/biz/v1/user/send_code_for_change
+	r.Handle(POST, "send_code_for_change", SendCode())
+
 	// 更新联系方式接口（绑定/换绑） 手机号/邮箱
 	// [POST] /api/biz/v1/user/account
 	r.Handle(POST, "account", UpdateAccount())
