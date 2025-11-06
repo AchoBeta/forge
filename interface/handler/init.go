@@ -26,6 +26,14 @@ type IHandler interface {
 
 	// COS: OSS凭证相关接口
 	GetOSSCredentials(ctx context.Context, req *def.GetOSSCredentialsReq) (rsp *def.GetOSSCredentialsResp, err error)
+
+	//AiChat: ai对话相关
+	SendMessage(ctx context.Context, req *def.ProcessUserMessageRequest) (*def.ProcessUserMessageResponse, error)
+	SaveNewConversation(ctx context.Context, req *def.SaveNewConversationRequest) (*def.SaveNewConversationResponse, error)
+	GetConversationList(ctx context.Context, req *def.GetConversationListRequest) (*def.GetConversationListResponse, error)
+	DelConversation(ctx context.Context, req *def.DelConversationRequest) (*def.DelConversationResponse, error)
+	GetConversation(ctx context.Context, req *def.GetConversationRequest) (*def.GetConversationResponse, error)
+	UpdateConversationTitle(ctx context.Context, req *def.UpdateConversationTitleRequest) (*def.UpdateConversationTitleResponse, error)
 }
 
 var handler IHandler
@@ -34,23 +42,25 @@ type Handler struct {
 	UserService    types.IUserService
 	MindMapService types.IMindMapService
 	COSService     types.ICOSService
+	AiChatService  types.IAiChatService
 }
 
 func GetHandler() IHandler {
 	return handler
 }
-func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService) {
-	err := InitHandler(userService, mindMapService, cosService)
+func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService) {
+	err := InitHandler(userService, mindMapService, cosService, aiChatService)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func InitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService) error {
+func InitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService) error {
 	handler = &Handler{
 		UserService:    userService,
 		MindMapService: mindMapService,
 		COSService:     cosService,
+		AiChatService:  aiChatService,
 	}
 	return nil
 }
