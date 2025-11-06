@@ -27,7 +27,6 @@ import (
 // 因为解耦的缘故，框架层面的更换不会对内部代码造成任何影响
 // router 与hander 应该是一个一对一的关系，有可能会有多对一的关系
 
-
 // handleHandlerResponse 统一处理 handler 的响应和错误
 func handleHandlerResponse(gCtx *gin.Context, rsp interface{}, err error, emptyResp interface{}) {
 	r := response.NewResponse(gCtx)
@@ -41,6 +40,7 @@ func handleHandlerResponse(gCtx *gin.Context, rsp interface{}, err error, emptyR
 		return
 	}
 	r.Success(rsp)
+}
 
 // abortWithError 辅助函数：封装错误响应逻辑，减少代码重复
 func abortWithError(gCtx *gin.Context, ctx context.Context, msgCode response.MsgCode, err error) {

@@ -202,10 +202,11 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		Password: hash,
 		// 根据 accountType 填写登录方式字段
 	}
-	if req.AccountType == types.AccountTypePhone {
+	switch req.AccountType {
+	case types.AccountTypePhone:
 		user.Phone = req.Account
 		user.PhoneVerified = true
-	} else if req.AccountType == types.AccountTypeEmail {
+	case types.AccountTypeEmail:
 		user.Email = req.Account
 		user.EmailVerified = true
 	}
@@ -523,7 +524,7 @@ func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAc
 	}
 
 	// 验证验证码（验证发送到新联系方式的验证码）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return "", err
 	}
 
