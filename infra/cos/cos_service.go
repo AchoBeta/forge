@@ -30,7 +30,8 @@ func NewCOSService(cfg configs.COSConfig) adapter.COSService {
 	)
 
 	// 创建COS上传客户端
-	bucketURL, err := url.Parse(fmt.Sprintf("https://%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.Region))
+	// 腾讯云COS的正确格式：{bucket}-{app_id}.cos.{region}.myqcloud.com
+	bucketURL, err := url.Parse(fmt.Sprintf("https://%s-%s.cos.%s.myqcloud.com", cfg.Bucket, cfg.AppID, cfg.Region))
 	if err != nil {
 		zlog.Errorf("invalid bucket URL: %v", err)
 		panic(fmt.Sprintf("invalid bucket URL: %v", err))
@@ -133,7 +134,7 @@ func (c *cosServiceImpl) UploadFile(ctx context.Context, resourcePath string, fi
 
 	_, err := c.cosClient.Object.Put(ctx, resourcePath, bytes.NewReader(fileData), opt)
 	if err != nil {
-		zlog.CtxErrorf(ctx, "failed to upload file to COS: %v", err)
+		zlog.CtxErrorf(ctx, "failed to upload file to COS, path: %s, error: %v", resourcePath, err)
 		return "", fmt.Errorf("failed to upload file to COS: %w", err)
 	}
 

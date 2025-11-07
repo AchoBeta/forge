@@ -180,9 +180,10 @@ func (s *COSServiceImpl) UploadAvatar(ctx context.Context, userID string, fileDa
 	resourcePath := path.Join("user", userID, "avatar", uniqueFilename)
 
 	// 调用基础设施层上传文件
+	zlog.CtxInfof(ctx, "uploading avatar, userID: %s, resourcePath: %s, filename: %s", userID, resourcePath, sanitizedFilename)
 	avatarURL, err := s.cosService.UploadFile(ctx, resourcePath, fileData, contentType)
 	if err != nil {
-		zlog.CtxErrorf(ctx, "failed to upload avatar: %v", err)
+		zlog.CtxErrorf(ctx, "failed to upload avatar, userID: %s, resourcePath: %s, error: %v", userID, resourcePath, err)
 		return "", ErrInternalError
 	}
 
