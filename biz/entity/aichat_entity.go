@@ -1,9 +1,16 @@
 package entity
 
 import (
+	"fmt"
 	"forge/infra/configs"
 	"forge/util"
 	"time"
+)
+
+var (
+	SYSTEM    = "system"
+	USER      = "user"
+	ASSISTANT = "assistant"
 )
 
 type Message struct {
@@ -32,12 +39,6 @@ func NewConversation(userID, mapID, title string) (*Conversation, error) {
 
 	messages := make([]*Message, 0)
 
-	messages = append(messages, &Message{
-		Content:   configs.Config().GetAiChatConfig().SystemPrompt, //这个是初始系统提示词
-		Role:      "system",
-		Timestamp: now,
-	})
-
 	return &Conversation{
 		ConversationID: newID,
 		UserID:         userID,
@@ -65,4 +66,25 @@ func (c *Conversation) AddMessage(content, role string) *Message {
 
 func (c *Conversation) UpdateTitle(title string) {
 	c.Title = title
+}
+
+// 更新导图提示词
+func (c *Conversation) UpdateMindMapMessage(data string) {
+
+}
+
+// 处理系统提示词
+func (c *Conversation) ProcessSystemPrompt(mapData string)  {
+	version := len(c.Messages)
+
+	text := fmt.Sprintf(configs.Config().GetAiChatConfig().SystemPrompt, version, version, mapData)
+	if len(c.Messages)==0{
+		c.AddMessage(text,SYSTEM)
+	}else{
+		c.Messages[0]=  &Message{
+			Content:   text,
+			Role:      SYSTEM,
+			Timestamp: time.Now(),
+		}
+	}
 }

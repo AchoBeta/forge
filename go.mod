@@ -34,7 +34,7 @@ require (
 	github.com/bytedance/sonic/loader v0.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudwego/base64x v0.1.6 // indirect
-	github.com/cloudwego/eino v0.5.11 // indirect
+	github.com/cloudwego/eino v0.5.12 // indirect
 	github.com/cloudwego/eino-ext/components/model/ark v0.1.41 // indirect
 	github.com/coze-dev/cozeloop-go/spec v0.1.4-0.20250829072213-3812ddbfb735 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect

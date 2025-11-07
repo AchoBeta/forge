@@ -40,17 +40,20 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.Proce
 		return "", err
 	}
 
+	//更新导图提示词
+	conversation.ProcessSystemPrompt(req.MapData)
+
 	//添加用户聊天记录
-	conversation.AddMessage(req.Message, "user")
+	conversation.AddMessage(req.Message, entity.USER)
 
 	//调用ai 返回ai消息
-	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages)
+	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages, req.MapData)
 	if err != nil {
 		return "", err
 	}
 
 	//添加ai消息
-	conversation.AddMessage(aiMsg, "assistant")
+	conversation.AddMessage(aiMsg, entity.ASSISTANT)
 
 	//更新会话聊天记录
 	err = a.aiChatRepo.UpdateConversationMessage(ctx, conversation)
@@ -72,6 +75,8 @@ func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.Save
 	if err != nil {
 		return err
 	}
+	//初始化系统提示词
+	conversation.ProcessSystemPrompt(req.MapData)
 
 	err = a.aiChatRepo.SaveConversation(ctx, conversation)
 	if err != nil {

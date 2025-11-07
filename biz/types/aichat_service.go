@@ -28,11 +28,13 @@ type IAiChatService interface {
 type ProcessUserMessageParams struct {
 	ConversationID string
 	Message        string
+	MapData        string
 }
 
 type SaveNewConversationParams struct {
-	Title string
-	MapID string
+	Title   string
+	MapID   string
+	MapData string
 }
 
 type GetConversationListParams struct {

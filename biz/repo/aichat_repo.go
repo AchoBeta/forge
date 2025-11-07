@@ -27,5 +27,5 @@ type AiChatRepo interface {
 
 type EinoServer interface {
 	//向ai发送消息
-	SendMessage(ctx context.Context, messages []*entity.Message) (string, error)
+	SendMessage(ctx context.Context, messages []*entity.Message, mapData string) (string, error)
 }

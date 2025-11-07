@@ -9,6 +9,7 @@ import (
 type ProcessUserMessageRequest struct {
 	ConversationID string `json:"conversation_id" binding:"required"`
 	Content        string `json:"content" binding:"required"`
+	MapData        string `json:"map_data"`
 }
 
 type ProcessUserMessageResponse struct {
@@ -17,8 +18,9 @@ type ProcessUserMessageResponse struct {
 }
 
 type SaveNewConversationRequest struct {
-	Title string `json:"title" binding:"required"`
-	MapID string `json:"map_id" binding:"required"`
+	Title   string `json:"title" binding:"required"`
+	MapID   string `json:"map_id" binding:"required"`
+	MapData string `json:"map_data"`
 }
 
 type SaveNewConversationResponse struct {
