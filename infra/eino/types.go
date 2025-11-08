@@ -23,6 +23,11 @@ func messagesDo2Input(Messages []*entity.Message) []*schema.Message {
 	return res
 }
 
+func initGenerateMindMapMessage(text string) []*schema.Message {
+	res := make([]*schema.Message, 0)
+	res = append(res, &schema.Message{})
+}
+
 func initToolUpdateMindMap(mapData, requirement string) []*schema.Message {
 	res := make([]*schema.Message, 0)
 	res = append(res, &schema.Message{

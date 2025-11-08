@@ -83,7 +83,7 @@ func (c *Conversation) UpdateMindMapMessage(data string) {
 func (c *Conversation) ProcessSystemPrompt(mapData string) {
 	version := len(c.Messages)
 
-	text := fmt.Sprintf(configs.Config().GetAiChatConfig().SystemPrompt, c.ConversationID, version, version, mapData)
+	text := fmt.Sprintf(configs.Config().GetAiChatConfig().SystemPrompt, version, version, mapData)
 	if len(c.Messages) == 0 {
 		c.AddMessage(text, SYSTEM, "", nil)
 	} else {

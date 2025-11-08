@@ -153,3 +153,7 @@ func (a *AiChatService) UpdateConversationTitle(ctx context.Context, req *types.
 	}
 	return nil
 }
+
+func (a *AiChatService) GenerateMindMap(ctx context.Context, req *types.GenerateMindMapParams) (string, error) {
+
+}

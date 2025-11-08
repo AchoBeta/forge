@@ -203,3 +203,7 @@ func (a *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Messa
 	}
 	return resp, nil
 }
+
+func (a *AiChatClient) GenerateMindMap(ctx context.Context, text string) (string, error) {
+
+}

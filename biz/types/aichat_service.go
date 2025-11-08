@@ -24,6 +24,8 @@ type IAiChatService interface {
 
 	//更新某会话的标题
 	UpdateConversationTitle(ctx context.Context, req *UpdateConversationTitleParams) error
+
+	GenerateMindMap(ctx context.Context, req *GenerateMindMapParams) (string, error)
 }
 
 type ProcessUserMessageParams struct {
@@ -60,4 +62,8 @@ type AgentResponse struct {
 	Content    string            `json:"content"`
 	ToolCallID string            `json:"tool_call_id"`
 	ToolCalls  []schema.ToolCall `json:"tool_calls"`
+}
+
+type GenerateMindMapParams struct {
+	text string
 }

@@ -70,3 +70,12 @@ type UpdateConversationTitleRequest struct {
 type UpdateConversationTitleResponse struct {
 	Success bool `json:"success"`
 }
+
+type GenerateMindMapRequest struct {
+	Text string `json:"text"`
+}
+
+type GenerateMindMapResponse struct {
+	Success bool   `json:"success"`
+	MapJson string `json:"map_json"`
+}
