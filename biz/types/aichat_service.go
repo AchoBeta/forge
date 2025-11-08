@@ -3,11 +3,12 @@ package types
 import (
 	"context"
 	"forge/biz/entity"
+	"github.com/cloudwego/eino/schema"
 )
 
 type IAiChatService interface {
 	//处理用户消息
-	ProcessUserMessage(ctx context.Context, req *ProcessUserMessageParams) (string, error)
+	ProcessUserMessage(ctx context.Context, req *ProcessUserMessageParams) (AgentResponse, error)
 
 	//保存新的会话
 	SaveNewConversation(ctx context.Context, req *SaveNewConversationParams) error
@@ -52,4 +53,11 @@ type GetConversationParams struct {
 type UpdateConversationTitleParams struct {
 	ConversationID string
 	Title          string
+}
+
+type AgentResponse struct {
+	NewMapJson string            `json:"new_map_json"`
+	Content    string            `json:"content"`
+	ToolCallID string            `json:"tool_call_id"`
+	ToolCalls  []schema.ToolCall `json:"tool_calls"`
 }

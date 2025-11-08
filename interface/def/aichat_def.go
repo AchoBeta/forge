@@ -13,8 +13,9 @@ type ProcessUserMessageRequest struct {
 }
 
 type ProcessUserMessageResponse struct {
-	Content string `json:"content"`
-	Success bool   `json:"success"`
+	NewMapJson string `json:"new_map_json"`
+	Content    string `json:"content"`
+	Success    bool   `json:"success"`
 }
 
 type SaveNewConversationRequest struct {

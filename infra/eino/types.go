@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"forge/biz/entity"
 	"forge/infra/configs"
-	"github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -14,8 +13,10 @@ func messagesDo2Input(Messages []*entity.Message) []*schema.Message {
 
 	for _, msg := range Messages {
 		res = append(res, &schema.Message{
-			Content: msg.Content,
-			Role:    schema.RoleType(msg.Role),
+			Content:    msg.Content,
+			ToolCalls:  msg.ToolCalls,
+			ToolCallID: msg.ToolCallID,
+			Role:       schema.RoleType(msg.Role),
 		})
 	}
 
@@ -33,6 +34,5 @@ func initToolUpdateMindMap(mapData, requirement string) []*schema.Message {
 
 type UpdateMindMapParams struct {
 	Requirement string `json:"requirement" jsonschema:"description=更改导图的要求"`
-	MapData     string
-	AiClient    *ark.ChatModel
+	MapJson     string `json:"map_json" jsonschema:"description=当前最新的导图json数据,不要注释、不要 Markdown 包裹"`
 }

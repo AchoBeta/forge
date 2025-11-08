@@ -2,21 +2,18 @@ package eino
 
 import (
 	"context"
-	"forge/pkg/log/zlog"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/components/tool/utils"
 	"github.com/cloudwego/eino/schema"
 )
 
 func UpdateMindMap(ctx context.Context, params *UpdateMindMapParams) (string, error) {
-	message := initToolUpdateMindMap(params.MapData, params.Requirement)
+	message := initToolUpdateMindMap(params.MapJson, params.Requirement)
 
-	resp, err := params.AiClient.Generate(ctx, message)
+	resp, err := toolAiClient.Generate(ctx, message)
 	if err != nil {
-		zlog.Errorf("模型调用失败%v", err)
 		return "", err
 	}
-
 	return resp.Content, nil
 }
 
@@ -29,7 +26,12 @@ func CreateUpdateMindMapTool() tool.InvokableTool {
 				map[string]*schema.ParameterInfo{
 					"requirement": {
 						Type:     schema.String,
-						Desc:     "修改导图的需求，例如「把 root.children[0].data.text 改成『新产品』」",
+						Desc:     "需要工具修改导图的需求，例如「把 root.children[0].data.text 改成『新产品』」",
+						Required: true,
+					},
+					"map_json": {
+						Type:     schema.String,
+						Desc:     "传入最开始的系统消息的导图json数据,不要注释、不要 Markdown 包裹",
 						Required: true,
 					},
 				},

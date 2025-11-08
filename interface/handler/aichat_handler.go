@@ -17,8 +17,9 @@ func (h *Handler) SendMessage(ctx context.Context, req *def.ProcessUserMessageRe
 	}
 
 	resp := &def.ProcessUserMessageResponse{
-		Content: aiMsg,
-		Success: true,
+		Content:    aiMsg.Content,
+		NewMapJson: aiMsg.NewMapJson,
+		Success:    true,
 	}
 
 	return resp, nil

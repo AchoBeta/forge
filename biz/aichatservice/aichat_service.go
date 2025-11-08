@@ -28,37 +28,40 @@ func NewAiChatService(aiChatRepo repo.AiChatRepo, einoServer repo.EinoServer) *A
 	return &AiChatService{aiChatRepo: aiChatRepo, einoServer: einoServer}
 }
 
-func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.ProcessUserMessageParams) (string, error) {
+func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.ProcessUserMessageParams) (types.AgentResponse, error) {
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return "", AI_CHAT_PERMISSION_DENIED
+		return types.AgentResponse{}, AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
 	if err != nil {
-		return "", err
+		return types.AgentResponse{}, err
 	}
 
 	//更新导图提示词
 	conversation.ProcessSystemPrompt(req.MapData)
 
 	//添加用户聊天记录
-	conversation.AddMessage(req.Message, entity.USER)
+	conversation.AddMessage(req.Message, entity.USER, "", nil)
 
 	//调用ai 返回ai消息
-	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages, req.MapData)
+	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages)
 	if err != nil {
-		return "", err
+		return types.AgentResponse{}, err
 	}
 
 	//添加ai消息
-	conversation.AddMessage(aiMsg, entity.ASSISTANT)
+	conversation.AddMessage(aiMsg.Content, entity.ASSISTANT, "", aiMsg.ToolCalls)
+	if aiMsg.NewMapJson != "" {
+		conversation.AddMessage(aiMsg.NewMapJson, entity.TOOL, aiMsg.ToolCallID, nil)
+	}
 
 	//更新会话聊天记录
 	err = a.aiChatRepo.UpdateConversationMessage(ctx, conversation)
 	if err != nil {
-		return "", err
+		return types.AgentResponse{}, err
 	}
 
 	return aiMsg, nil

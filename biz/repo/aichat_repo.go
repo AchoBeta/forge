@@ -3,6 +3,7 @@ package repo
 import (
 	"context"
 	"forge/biz/entity"
+	"forge/biz/types"
 )
 
 type AiChatRepo interface {
@@ -27,5 +28,5 @@ type AiChatRepo interface {
 
 type EinoServer interface {
 	//向ai发送消息
-	SendMessage(ctx context.Context, messages []*entity.Message, mapData string) (string, error)
+	SendMessage(ctx context.Context, messages []*entity.Message) (types.AgentResponse, error)
 }
