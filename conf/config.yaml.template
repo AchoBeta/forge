@@ -40,6 +40,10 @@ cos:        # 腾讯云COS配置
   base_url: https://your-bucket-name.cos.ap-guangzhou.myqcloud.com
   sts_duration: 3600
 
+sms:         # 短信验证码配置
+  template_id:              # 短信模板ID        第三方:https://push.spug.cc/
+  endpoint: "https://push.spug.cc/send/%s?code=%s&targets=%s"  # 短信接口URL模板
+
  ai_client:
    api_key: key
    model_name: model

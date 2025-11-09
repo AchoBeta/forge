@@ -19,6 +19,7 @@ type IConfig interface {
 	GetSMTPConfig() SMTPConfig // SMTP服务 发送邮件
 	GetCOSConfig() COSConfig
 	GetAiChatConfig() AiChatConfig
+	GetSMSConfig() SMSConfig
 }
 
 var (
@@ -72,6 +73,9 @@ func (c *config) GetCOSConfig() COSConfig {
 // ai模型配置读取
 func (c *config) GetAiChatConfig() AiChatConfig { return c.AiChatConfig }
 
+// sms配置读取
+func (c *config) GetSMSConfig() SMSConfig { return c.SMSConfig }
+
 func mustInit(path string) *config {
 	// 初始化时间为东八区的时间
 	var cstZone = time.FixedZone("CST", 8*3600) // 东八
@@ -121,6 +125,7 @@ type config struct {
 	SMTPConfig      SMTPConfig        `mapstructure:"smtp"`
 	COSConfig       COSConfig         `mapstructure:"cos"`
 	AiChatConfig    AiChatConfig      `mapstructure:"ai_client"`
+	SMSConfig       SMSConfig         `mapstructure:"sms"`
 }
 
 type ApplicationConfig struct {
@@ -186,4 +191,9 @@ type AiChatConfig struct {
 	ApiKey       string `mapstructure:"api_key"`
 	ModelName    string `mapstructure:"model_name"`
 	SystemPrompt string `mapstructure:"system_prompt"`
+}
+
+type SMSConfig struct {
+	TemplateID string `mapstructure:"template_id"`
+	Endpoint   string `mapstructure:"endpoint"`
 }

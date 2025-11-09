@@ -52,22 +52,22 @@ var (
 // infra的所有函数都是通过接口来用的
 
 type UserServiceImpl struct {
-	userRepo     repo.UserRepo
-	cozeService  adapter.CozeService
-	jwtUtil      *util.JWTUtil
-	emailService adapter.EmailService
+	userRepo    repo.UserRepo
+	cozeService adapter.CozeService
+	jwtUtil     *util.JWTUtil
+	codeService adapter.CodeService
 }
 
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
 	cozeService adapter.CozeService,
 	jwtUtil *util.JWTUtil,
-	emailService adapter.EmailService) *UserServiceImpl {
+	codeService adapter.CodeService) *UserServiceImpl {
 	return &UserServiceImpl{
-		userRepo:     userRepo,
-		cozeService:  cozeService,
-		jwtUtil:      jwtUtil,
-		emailService: emailService,
+		userRepo:    userRepo,
+		cozeService: cozeService,
+		jwtUtil:     jwtUtil,
+		codeService: codeService,
 	}
 }
 
@@ -417,7 +417,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 	switch accountType {
 	case types.AccountTypeEmail:
 		// 发送邮件
-		if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
+		if err := u.codeService.SendEmailCode(ctx, account, code); err != nil {
 			zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
 			// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
 			if delErr := cache.DelRedis(ctx, key); delErr != nil {
@@ -427,7 +427,13 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 		}
 
 	case types.AccountTypePhone:
-		// 手机号 发短信
+		if err := u.codeService.SendSMSCode(ctx, account, code); err != nil {
+			zlog.CtxErrorf(ctx, "send sms verification code failed: %v", err)
+			if delErr := cache.DelRedis(ctx, key); delErr != nil {
+				zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+			}
+			return ErrInternalError
+		}
 
 	default:
 		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
