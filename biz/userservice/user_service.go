@@ -413,31 +413,29 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 		return ErrInternalError
 	}
 
-	// 根据账号类型发送验证码
+	var (
+		sendFunc func(context.Context, string, string) error
+		errorLog string
+	)
+
 	switch accountType {
 	case types.AccountTypeEmail:
-		// 发送邮件
-		if err := u.codeService.SendEmailCode(ctx, account, code); err != nil {
-			zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
-			// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
-			if delErr := cache.DelRedis(ctx, key); delErr != nil {
-				zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
-			}
-			return ErrInternalError
-		}
-
+		sendFunc = u.codeService.SendEmailCode
+		errorLog = "send verification code failed"
 	case types.AccountTypePhone:
-		if err := u.codeService.SendSMSCode(ctx, account, code); err != nil {
-			zlog.CtxErrorf(ctx, "send sms verification code failed: %v", err)
-			if delErr := cache.DelRedis(ctx, key); delErr != nil {
-				zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
-			}
-			return ErrInternalError
-		}
-
+		sendFunc = u.codeService.SendSMSCode
+		errorLog = "send sms verification code failed"
 	default:
 		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
 		return ErrUnsupportedAccountType
+	}
+
+	if err := sendFunc(ctx, account, code); err != nil {
+		zlog.CtxErrorf(ctx, "%s: %v", errorLog, err)
+		if delErr := cache.DelRedis(ctx, key); delErr != nil {
+			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
+		}
+		return ErrInternalError
 	}
 
 	return nil

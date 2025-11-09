@@ -194,6 +194,6 @@ type AiChatConfig struct {
 }
 
 type SMSConfig struct {
-	TemplateID string `mapstructure:"template_id"`
-	Endpoint   string `mapstructure:"endpoint"`
+	Key      string `mapstructure:"key"`
+	Endpoint string `mapstructure:"endpoint"`
 }

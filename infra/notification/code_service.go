@@ -92,8 +92,8 @@ func (c *codeServiceImpl) SendSMSCode(ctx context.Context, phone, code string) e
 		return fmt.Errorf("code service not initialized")
 	}
 
-	if c.smsConfig.TemplateID == "" {
-		return fmt.Errorf("sms template id not configured")
+	if c.smsConfig.Key == "" {
+		return fmt.Errorf("sms key not configured")
 	}
 
 	endpoint := c.smsConfig.Endpoint
@@ -101,8 +101,15 @@ func (c *codeServiceImpl) SendSMSCode(ctx context.Context, phone, code string) e
 		return fmt.Errorf("sms endpoint not configured")
 	}
 
-	smsURL := fmt.Sprintf(endpoint, c.smsConfig.TemplateID, url.QueryEscape(code), url.QueryEscape(phone))
-	resp, err := c.httpClient.Get(smsURL)
+	smsURL := fmt.Sprintf(endpoint, c.smsConfig.Key, url.QueryEscape(code), url.QueryEscape(phone))
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, smsURL, nil)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "创建短信服务请求失败: %v", err)
+		return fmt.Errorf("failed to create sms service request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
 	if err != nil {
 		zlog.CtxErrorf(ctx, "请求短信服务失败: %v", err)
 		return fmt.Errorf("request sms service failed: %w", err)
