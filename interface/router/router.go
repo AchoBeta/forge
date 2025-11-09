@@ -108,6 +108,10 @@ func loadUserAuthService(r *gin.RouterGroup) {
 	// [POST] /api/biz/v1/user/account
 	r.Handle(POST, "account", UpdateAccount())
 
+	// 解绑联系方式接口（手机号/邮箱）
+	// [DELETE] /api/biz/v1/user/contact
+	r.Handle(DELETE, "contact", UnbindAccount())
+
 	// 更新头像接口（改为POST，因为要上传文件）
 	// [POST] /api/biz/v1/user/avatar
 	r.Handle(POST, "avatar", UpdateAvatar())

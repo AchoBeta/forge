@@ -106,4 +106,14 @@ type UpdateAccountResp struct {
 	Account string `json:"account"` // 更新后的联系方式
 }
 
+//---------解绑联系方式-----------
+type UnbindAccountReq struct {
+	Account     string `json:"account"`      // 需要解绑的手机号/邮箱
+	AccountType string `json:"account_type"` // 账号类型：phone（手机号）或 email（邮箱）
+}
+
+type UnbindAccountResp struct {
+	Success bool `json:"success"` // 解绑是否成功
+}
+
 //---------第三方--------- 暂时先不做

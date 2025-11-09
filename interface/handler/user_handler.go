@@ -140,6 +140,23 @@ func (h *Handler) UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) 
 	return rsp, nil
 }
 
+func (h *Handler) UnbindAccount(ctx context.Context, req *def.UnbindAccountReq) (rsp *def.UnbindAccountResp, err error) {
+	defer func() {
+		zlog.CtxAllInOne(ctx, "handler.unbind_account", req, rsp, err)
+	}()
+
+	// DTO -> Service 层参数转换
+	params := caster.CastUnbindAccountReq2Params(req)
+	if err := h.UserService.UnbindAccount(ctx, params); err != nil {
+		return nil, err
+	}
+
+	rsp = &def.UnbindAccountResp{
+		Success: true,
+	}
+	return rsp, nil
+}
+
 func (h *Handler) UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (rsp *def.UpdateAvatarResp, err error) {
 	defer func() {
 		zlog.CtxAllInOne(ctx, "handler.update_avatar", req, rsp, err)

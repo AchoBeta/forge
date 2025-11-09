@@ -43,6 +43,7 @@ var (
 	// EMAIL_ALREADY_IN_USE 已废弃，请使用 ACCOUNT_ALREADY_IN_USE（保持向后兼容）
 	EMAIL_ALREADY_IN_USE    = ACCOUNT_ALREADY_IN_USE
 	PASSWORD_REQUIRED       = MsgCode{Code: 2010, Msg: "密码必填"}
+	ACCOUNT_LAST_CONTACT    = MsgCode{Code: 2011, Msg: "无法解绑唯一联系方式"}
 	CAPTCHA_ERROR           = MsgCode{Code: 2100, Msg: "验证码错误"}
 	INSUFFICENT_PERMISSIONS = MsgCode{Code: 2200, Msg: "权限不足"}
 
