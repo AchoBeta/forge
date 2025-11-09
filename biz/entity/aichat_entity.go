@@ -74,11 +74,6 @@ func (c *Conversation) UpdateTitle(title string) {
 	c.Title = title
 }
 
-// 更新导图提示词
-func (c *Conversation) UpdateMindMapMessage(data string) {
-
-}
-
 // 处理系统提示词
 func (c *Conversation) ProcessSystemPrompt(mapData string) {
 	version := len(c.Messages)

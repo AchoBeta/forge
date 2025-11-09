@@ -7,17 +7,17 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
-func UpdateMindMap(ctx context.Context, params *UpdateMindMapParams) (string, error) {
+func (a *AiChatClient) UpdateMindMap(ctx context.Context, params *UpdateMindMapParams) (string, error) {
 	message := initToolUpdateMindMap(params.MapJson, params.Requirement)
 
-	resp, err := toolAiClient.Generate(ctx, message)
+	resp, err := a.ToolAiClient.Generate(ctx, message)
 	if err != nil {
 		return "", err
 	}
 	return resp.Content, nil
 }
 
-func CreateUpdateMindMapTool() tool.InvokableTool {
+func (a *AiChatClient) CreateUpdateMindMapTool() tool.InvokableTool {
 	updateMindMapTool := utils.NewTool(
 		&schema.ToolInfo{
 			Name: "update_mind_map",
@@ -36,6 +36,6 @@ func CreateUpdateMindMapTool() tool.InvokableTool {
 					},
 				},
 			),
-		}, UpdateMindMap)
+		}, a.UpdateMindMap)
 	return updateMindMapTool
 }

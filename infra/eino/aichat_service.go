@@ -15,14 +15,11 @@ import (
 	"github.com/volcengine/volcengine-go-sdk/service/arkruntime/model"
 )
 
-var (
-	toolAiClient *ark.ChatModel
-)
-
 type AiChatClient struct {
-	ApiKey    string
-	ModelName string
-	Agent     compose.Runnable[[]*schema.Message, types.AgentResponse]
+	ApiKey       string
+	ModelName    string
+	Agent        compose.Runnable[[]*schema.Message, types.AgentResponse]
+	ToolAiClient *ark.ChatModel
 }
 
 type State struct {
@@ -39,6 +36,8 @@ func initState(ctx context.Context) *State {
 func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 	ctx := context.Background()
 
+	var aiChatClient AiChatClient
+
 	//初始化工具专用模型
 	toolModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
 		APIKey:   apiKey,
@@ -49,7 +48,12 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 		zlog.Errorf("ToolAi模型连接失败: %v", err)
 		panic(fmt.Errorf("ToolAi模型连接失败: %v", err))
 	}
-	toolAiClient = toolModel
+
+	//toolAiClient = toolModel
+
+	aiChatClient.ApiKey = apiKey
+	aiChatClient.ModelName = modelName
+	aiChatClient.ToolAiClient = toolModel
 
 	//构建agent
 	aiChatModel, err := ark.NewChatModel(ctx, &ark.ChatModelConfig{
@@ -61,7 +65,7 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 		zlog.Errorf("ai模型连接失败: %v", err)
 		panic(fmt.Errorf("ai模型连接失败: %v", err))
 	}
-	updateMindMapTool := CreateUpdateMindMapTool()
+	updateMindMapTool := aiChatClient.CreateUpdateMindMapTool()
 	infoTool, err := updateMindMapTool.Info(ctx)
 	if err != nil {
 		zlog.Errorf("ai绑定工具失败: %v", err)
@@ -97,7 +101,7 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 
 	//分支结束统一进入的lambda 用于处理输出的数据
 	lambda2 := compose.InvokableLambda(func(ctx context.Context, input []*schema.Message) (output types.AgentResponse, err error) {
-		fmt.Println("lambda测试：", input)
+		//fmt.Println("lambda测试：", input)
 
 		if len(input) == 0 {
 			return types.AgentResponse{}, errors.New("agent出错")
@@ -120,7 +124,7 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 
 	//chatModel执行完之后把 输出存一下
 	chatModelPostHandler := func(ctx context.Context, input *schema.Message, state *State) (output *schema.Message, err error) {
-		fmt.Println("工具使用测试:", input)
+		//fmt.Println("工具使用测试:", input)
 		state.ToolCalls = input.ToolCalls
 		state.Content = input.Content
 		return input, nil
@@ -188,7 +192,9 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 		panic("编译错误" + err.Error())
 	}
 
-	return &AiChatClient{ApiKey: apiKey, ModelName: modelName, Agent: agent}
+	aiChatClient.Agent = agent
+
+	return &aiChatClient
 }
 
 func (a *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Message) (types.AgentResponse, error) {
@@ -208,7 +214,7 @@ func (a *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Messa
 func (a *AiChatClient) GenerateMindMap(ctx context.Context, text, userID string) (string, error) {
 	message := initGenerateMindMapMessage(text, userID)
 
-	resp, err := toolAiClient.Generate(ctx, message)
+	resp, err := a.ToolAiClient.Generate(ctx, message)
 	if err != nil {
 		zlog.Errorf("模型调用失败%v", err)
 		return "", err
