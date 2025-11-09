@@ -606,40 +606,45 @@ func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAc
 	falseValue := false
 	emptyString := ""
 
+	var (
+		currentContact string
+		otherContact   string
+		accountLabel   string
+	)
+
 	switch req.AccountType {
 	case types.AccountTypePhone:
-		if currentUser.Phone == "" {
-			zlog.CtxErrorf(ctx, "phone is not bound, userID: %s", currentUser.UserID)
-			return ErrInvalidParams
-		}
-		if req.Account != currentUser.Phone {
-			zlog.CtxErrorf(ctx, "phone mismatch for unbind, userID: %s, request phone: %s", currentUser.UserID, req.Account)
-			return ErrInvalidParams
-		}
-		if currentUser.Email == "" {
-			zlog.CtxErrorf(ctx, "cannot unbind phone, no other contact bound, userID: %s", currentUser.UserID)
-			return ErrCannotUnbindOnlyContact
-		}
-		updateInfo.Phone = &emptyString
-		updateInfo.PhoneVerified = &falseValue
+		currentContact = currentUser.Phone
+		otherContact = currentUser.Email
+		accountLabel = "phone"
 	case types.AccountTypeEmail:
-		if currentUser.Email == "" {
-			zlog.CtxErrorf(ctx, "email is not bound, userID: %s", currentUser.UserID)
-			return ErrInvalidParams
-		}
-		if req.Account != currentUser.Email {
-			zlog.CtxErrorf(ctx, "email mismatch for unbind, userID: %s, request email: %s", currentUser.UserID, req.Account)
-			return ErrInvalidParams
-		}
-		if currentUser.Phone == "" {
-			zlog.CtxErrorf(ctx, "cannot unbind email, no other contact bound, userID: %s", currentUser.UserID)
-			return ErrCannotUnbindOnlyContact
-		}
-		updateInfo.Email = &emptyString
-		updateInfo.EmailVerified = &falseValue
+		currentContact = currentUser.Email
+		otherContact = currentUser.Phone
+		accountLabel = "email"
 	default:
 		zlog.CtxErrorf(ctx, "unsupported account type for unbind: %s", req.AccountType)
 		return ErrUnsupportedAccountType
+	}
+
+	if currentContact == "" {
+		zlog.CtxErrorf(ctx, "%s is not bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrInvalidParams
+	}
+	if req.Account != currentContact {
+		zlog.CtxErrorf(ctx, "%s mismatch for unbind, userID: %s, request %s: %s", accountLabel, currentUser.UserID, accountLabel, req.Account)
+		return ErrInvalidParams
+	}
+	if otherContact == "" {
+		zlog.CtxErrorf(ctx, "cannot unbind %s, no other contact bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrCannotUnbindOnlyContact
+	}
+
+	if req.AccountType == types.AccountTypePhone {
+		updateInfo.Phone = &emptyString
+		updateInfo.PhoneVerified = &falseValue
+	} else {
+		updateInfo.Email = &emptyString
+		updateInfo.EmailVerified = &falseValue
 	}
 
 	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
