@@ -23,9 +23,17 @@ func messagesDo2Input(Messages []*entity.Message) []*schema.Message {
 	return res
 }
 
-func initGenerateMindMapMessage(text string) []*schema.Message {
+func initGenerateMindMapMessage(text, userID string) []*schema.Message {
 	res := make([]*schema.Message, 0)
-	res = append(res, &schema.Message{})
+	res = append(res, &schema.Message{
+		Content: configs.Config().GetAiChatConfig().GenerateSystemPrompt,
+		Role:    schema.System,
+	})
+	res = append(res, &schema.Message{
+		Content: fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text),
+		Role:    schema.User,
+	})
+	return res
 }
 
 func initToolUpdateMindMap(mapData, requirement string) []*schema.Message {

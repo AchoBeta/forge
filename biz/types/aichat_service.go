@@ -4,6 +4,7 @@ import (
 	"context"
 	"forge/biz/entity"
 	"github.com/cloudwego/eino/schema"
+	"mime/multipart"
 )
 
 type IAiChatService interface {
@@ -11,7 +12,7 @@ type IAiChatService interface {
 	ProcessUserMessage(ctx context.Context, req *ProcessUserMessageParams) (AgentResponse, error)
 
 	//保存新的会话
-	SaveNewConversation(ctx context.Context, req *SaveNewConversationParams) error
+	SaveNewConversation(ctx context.Context, req *SaveNewConversationParams) (string, error)
 
 	//获取该导图的所有会话
 	GetConversationList(ctx context.Context, req *GetConversationListParams) ([]*entity.Conversation, error)
@@ -25,6 +26,7 @@ type IAiChatService interface {
 	//更新某会话的标题
 	UpdateConversationTitle(ctx context.Context, req *UpdateConversationTitleParams) error
 
+	//生成导图
 	GenerateMindMap(ctx context.Context, req *GenerateMindMapParams) (string, error)
 }
 
@@ -65,5 +67,6 @@ type AgentResponse struct {
 }
 
 type GenerateMindMapParams struct {
-	text string
+	Text string
+	File *multipart.FileHeader
 }

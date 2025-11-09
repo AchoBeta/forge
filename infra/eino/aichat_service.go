@@ -204,6 +204,14 @@ func (a *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Messa
 	return resp, nil
 }
 
-func (a *AiChatClient) GenerateMindMap(ctx context.Context, text string) (string, error) {
+// 传入文本生成导图
+func (a *AiChatClient) GenerateMindMap(ctx context.Context, text, userID string) (string, error) {
+	message := initGenerateMindMapMessage(text, userID)
 
+	resp, err := toolAiClient.Generate(ctx, message)
+	if err != nil {
+		zlog.Errorf("模型调用失败%v", err)
+		return "", err
+	}
+	return resp.Content, nil
 }

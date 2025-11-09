@@ -2,6 +2,7 @@ package def
 
 import (
 	"forge/biz/entity"
+	"mime/multipart"
 	"time"
 )
 
@@ -25,7 +26,8 @@ type SaveNewConversationRequest struct {
 }
 
 type SaveNewConversationResponse struct {
-	Success bool `json:"success"`
+	ConversationID string `json:"conversation_id"`
+	Success        bool   `json:"success"`
 }
 
 type GetConversationListRequest struct {
@@ -72,7 +74,8 @@ type UpdateConversationTitleResponse struct {
 }
 
 type GenerateMindMapRequest struct {
-	Text string `json:"text"`
+	Text string `json:"text"` //预留文本字段
+	File *multipart.FileHeader
 }
 
 type GenerateMindMapResponse struct {

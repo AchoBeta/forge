@@ -85,3 +85,13 @@ func CastUpdateConversationTitleReq2Params(req *def.UpdateConversationTitleReque
 		ConversationID: req.ConversationID,
 	}
 }
+
+func CastGenerateMindMapReq2Params(req *def.GenerateMindMapRequest) *types.GenerateMindMapParams {
+	if req == nil {
+		return nil
+	}
+	return &types.GenerateMindMapParams{
+		Text: req.Text,
+		File: req.File,
+	}
+}

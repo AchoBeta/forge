@@ -7,6 +7,7 @@ import (
 	"forge/biz/repo"
 	"forge/biz/types"
 	"forge/pkg/log/zlog"
+	"forge/util"
 )
 
 var (
@@ -67,25 +68,25 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.Proce
 	return aiMsg, nil
 }
 
-func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.SaveNewConversationParams) error {
+func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.SaveNewConversationParams) (string, error) {
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return AI_CHAT_PERMISSION_DENIED
+		return "", AI_CHAT_PERMISSION_DENIED
 	}
 
 	conversation, err := entity.NewConversation(user.UserID, req.MapID, req.Title)
 	if err != nil {
-		return err
+		return "", err
 	}
 	//初始化系统提示词
 	conversation.ProcessSystemPrompt(req.MapData)
 
 	err = a.aiChatRepo.SaveConversation(ctx, conversation)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return conversation.ConversationID, nil
 }
 
 func (a *AiChatService) GetConversationList(ctx context.Context, req *types.GetConversationListParams) ([]*entity.Conversation, error) {
@@ -155,5 +156,29 @@ func (a *AiChatService) UpdateConversationTitle(ctx context.Context, req *types.
 }
 
 func (a *AiChatService) GenerateMindMap(ctx context.Context, req *types.GenerateMindMapParams) (string, error) {
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
+		return "", AI_CHAT_PERMISSION_DENIED
+	}
 
+	if req.File == nil {
+		resp, err := a.einoServer.GenerateMindMap(ctx, req.Text, user.UserID)
+		if err != nil {
+			return "", err
+		}
+		return resp, nil
+	} else {
+		text, err := util.ParseFile(ctx, req.File)
+		if err != nil {
+			return "", err
+		}
+
+		resp, err := a.einoServer.GenerateMindMap(ctx, text, user.UserID)
+
+		if err != nil {
+			return "", err
+		}
+		return resp, nil
+	}
 }
