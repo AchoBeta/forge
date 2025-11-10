@@ -18,6 +18,8 @@ type IHandler interface {
 	GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error)
 	// UpdateAccount: 更新联系方式（绑定/换绑）
 	UpdateAccount(ctx context.Context, req *def.UpdateAccountReq) (rsp *def.UpdateAccountResp, err error)
+	// UnbindAccount: 解绑联系方式（手机号/邮箱）
+	UnbindAccount(ctx context.Context, req *def.UnbindAccountReq) (rsp *def.UnbindAccountResp, err error)
 	// UpdateAvatar: 更新头像
 	UpdateAvatar(ctx context.Context, req *def.UpdateAvatarReq) (rsp *def.UpdateAvatarResp, err error)
 

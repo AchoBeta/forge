@@ -84,6 +84,10 @@ func mapServiceErrorToMsgCode(err error) response.MsgCode {
 		return response.PARAM_NOT_VALID
 	}
 
+	if errors.Is(err, userservice.ErrCannotUnbindOnlyContact) {
+		return response.ACCOUNT_LAST_CONTACT
+	}
+
 	if errors.Is(err, userservice.ErrPasswordMismatch) {
 		return response.USER_PASSWORD_DIFFERENT
 	}
@@ -267,6 +271,29 @@ func UpdateAccount() gin.HandlerFunc {
 
 		rsp, err := handler.GetHandler().UpdateAccount(ctx, req)
 		handleHandlerResponse(gCtx, rsp, err, def.UpdateAccountResp{Success: false})
+	}
+}
+
+// UnbindAccount
+//
+//	@Description:[DELETE] /api/biz/v1/user/contact
+//	@return gin.HandlerFunc
+func UnbindAccount() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		req := &def.UnbindAccountReq{}
+		ctx := gCtx.Request.Context()
+
+		if err := gCtx.ShouldBindJSON(req); err != nil {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INVALID_PARAMS.Code,
+				Message: response.INVALID_PARAMS.Msg,
+				Data:    def.UnbindAccountResp{Success: false},
+			})
+			return
+		}
+
+		rsp, err := handler.GetHandler().UnbindAccount(ctx, req)
+		handleHandlerResponse(gCtx, rsp, err, def.UnbindAccountResp{Success: false})
 	}
 }
 

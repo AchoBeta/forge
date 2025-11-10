@@ -24,6 +24,9 @@ type IUserService interface {
 	// UpdateAccount 更新联系方式（绑定/换绑手机号或邮箱）
 	UpdateAccount(ctx context.Context, req *UpdateAccountParams) (string, error)
 
+	// UnbindAccount 解绑联系方式（手机号/邮箱）
+	UnbindAccount(ctx context.Context, req *UnbindAccountParams) error
+
 	// VerifyCode 验证验证码
 	VerifyCode(ctx context.Context, account, accountType, code string) error
 
@@ -55,6 +58,12 @@ type UpdateAccountParams struct {
 	AccountType string // 手机号/邮箱
 	Code        string // 验证码
 	Password    string // 密码（如果用户没有密码则必填，如果有密码则可选）
+}
+
+// 解绑联系方式参数
+type UnbindAccountParams struct {
+	Account     string // 需要解绑的手机号/邮箱
+	AccountType string // 手机号/邮箱
 }
 
 const (

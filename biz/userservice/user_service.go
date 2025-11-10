@@ -45,7 +45,8 @@ var (
 	ErrAccountAlreadyInUse = errors.New("account already in use")
 	ErrEmailAlreadyInUse   = ErrAccountAlreadyInUse
 	// ErrPasswordRequired 表示密码必填
-	ErrPasswordRequired = errors.New("password required")
+	ErrPasswordRequired        = errors.New("password required")
+	ErrCannotUnbindOnlyContact = errors.New("cannot unbind only contact")
 )
 
 // 最好的设计方案：
@@ -577,6 +578,82 @@ func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAc
 
 	zlog.CtxInfof(ctx, "account updated successfully, userID: %s, new account: %s", currentUser.UserID, req.Account)
 	return req.Account, nil
+}
+
+// UnbindAccount 解绑联系方式（手机号/邮箱）
+func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAccountParams) error {
+	// 参数校验
+	if req == nil {
+		zlog.CtxErrorf(ctx, "unbind account request is nil")
+		return ErrInvalidParams
+	}
+	if req.Account == "" || req.AccountType == "" {
+		zlog.CtxErrorf(ctx, "invalid params for unbind account: missing required fields")
+		return ErrInvalidParams
+	}
+
+	// 获取当前用户
+	currentUser, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context for unbind account")
+		return ErrPermissionDenied
+	}
+
+	// 准备更新信息
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: currentUser.UserID,
+	}
+	falseValue := false
+	emptyString := ""
+
+	var (
+		currentContact string
+		otherContact   string
+		accountLabel   string
+	)
+
+	switch req.AccountType {
+	case types.AccountTypePhone:
+		currentContact = currentUser.Phone
+		otherContact = currentUser.Email
+		accountLabel = "phone"
+	case types.AccountTypeEmail:
+		currentContact = currentUser.Email
+		otherContact = currentUser.Phone
+		accountLabel = "email"
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type for unbind: %s", req.AccountType)
+		return ErrUnsupportedAccountType
+	}
+
+	if currentContact == "" {
+		zlog.CtxErrorf(ctx, "%s is not bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrInvalidParams
+	}
+	if req.Account != currentContact {
+		zlog.CtxErrorf(ctx, "%s mismatch for unbind, userID: %s, request %s: %s", accountLabel, currentUser.UserID, accountLabel, req.Account)
+		return ErrInvalidParams
+	}
+	if otherContact == "" {
+		zlog.CtxErrorf(ctx, "cannot unbind %s, no other contact bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrCannotUnbindOnlyContact
+	}
+
+	if req.AccountType == types.AccountTypePhone {
+		updateInfo.Phone = &emptyString
+		updateInfo.PhoneVerified = &falseValue
+	} else {
+		updateInfo.Email = &emptyString
+		updateInfo.EmailVerified = &falseValue
+	}
+
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "unbind account failed: %v", err)
+		return ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "account unbound successfully, userID: %s, accountType: %s", currentUser.UserID, req.AccountType)
+	return nil
 }
 
 // generateVerificationCode 生成6位随机验证码
