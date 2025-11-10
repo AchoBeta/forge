@@ -7,6 +7,7 @@ import (
 	"forge/biz/repo"
 	"forge/biz/types"
 	"forge/pkg/log/zlog"
+	"forge/util"
 )
 
 var (
@@ -28,56 +29,64 @@ func NewAiChatService(aiChatRepo repo.AiChatRepo, einoServer repo.EinoServer) *A
 	return &AiChatService{aiChatRepo: aiChatRepo, einoServer: einoServer}
 }
 
-func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.ProcessUserMessageParams) (string, error) {
+func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.ProcessUserMessageParams) (types.AgentResponse, error) {
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
+		return types.AgentResponse{}, AI_CHAT_PERMISSION_DENIED
+	}
+
+	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
+	if err != nil {
+		return types.AgentResponse{}, err
+	}
+
+	//更新导图提示词
+	conversation.ProcessSystemPrompt(req.MapData)
+
+	//添加用户聊天记录
+	conversation.AddMessage(req.Message, entity.USER, "", nil)
+
+	//调用ai 返回ai消息
+	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages)
+	if err != nil {
+		return types.AgentResponse{}, err
+	}
+
+	//添加ai消息
+	conversation.AddMessage(aiMsg.Content, entity.ASSISTANT, "", aiMsg.ToolCalls)
+	if aiMsg.NewMapJson != "" {
+		conversation.AddMessage(aiMsg.NewMapJson, entity.TOOL, aiMsg.ToolCallID, nil)
+	}
+
+	//更新会话聊天记录
+	err = a.aiChatRepo.UpdateConversationMessage(ctx, conversation)
+	if err != nil {
+		return types.AgentResponse{}, err
+	}
+
+	return aiMsg, nil
+}
+
+func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.SaveNewConversationParams) (string, error) {
 	user, ok := entity.GetUser(ctx)
 	if !ok {
 		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
 		return "", AI_CHAT_PERMISSION_DENIED
 	}
 
-	conversation, err := a.aiChatRepo.GetConversation(ctx, req.ConversationID, user.UserID)
-	if err != nil {
-		return "", err
-	}
-
-	//添加用户聊天记录
-	conversation.AddMessage(req.Message, "user")
-
-	//调用ai 返回ai消息
-	aiMsg, err := a.einoServer.SendMessage(ctx, conversation.Messages)
-	if err != nil {
-		return "", err
-	}
-
-	//添加ai消息
-	conversation.AddMessage(aiMsg, "assistant")
-
-	//更新会话聊天记录
-	err = a.aiChatRepo.UpdateConversationMessage(ctx, conversation)
-	if err != nil {
-		return "", err
-	}
-
-	return aiMsg, nil
-}
-
-func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.SaveNewConversationParams) error {
-	user, ok := entity.GetUser(ctx)
-	if !ok {
-		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
-		return AI_CHAT_PERMISSION_DENIED
-	}
-
 	conversation, err := entity.NewConversation(user.UserID, req.MapID, req.Title)
 	if err != nil {
-		return err
+		return "", err
 	}
+	//初始化系统提示词
+	conversation.ProcessSystemPrompt(req.MapData)
 
 	err = a.aiChatRepo.SaveConversation(ctx, conversation)
 	if err != nil {
-		return err
+		return "", err
 	}
-	return nil
+	return conversation.ConversationID, nil
 }
 
 func (a *AiChatService) GetConversationList(ctx context.Context, req *types.GetConversationListParams) ([]*entity.Conversation, error) {
@@ -144,4 +153,32 @@ func (a *AiChatService) UpdateConversationTitle(ctx context.Context, req *types.
 		return err
 	}
 	return nil
+}
+
+func (a *AiChatService) GenerateMindMap(ctx context.Context, req *types.GenerateMindMapParams) (string, error) {
+	user, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "未能从上下文中获取用户信息")
+		return "", AI_CHAT_PERMISSION_DENIED
+	}
+
+	if req.File == nil {
+		resp, err := a.einoServer.GenerateMindMap(ctx, req.Text, user.UserID)
+		if err != nil {
+			return "", err
+		}
+		return resp, nil
+	} else {
+		text, err := util.ParseFile(ctx, req.File)
+		if err != nil {
+			return "", err
+		}
+
+		resp, err := a.einoServer.GenerateMindMap(ctx, text, user.UserID)
+
+		if err != nil {
+			return "", err
+		}
+		return resp, nil
+	}
 }

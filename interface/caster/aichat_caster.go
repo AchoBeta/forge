@@ -14,6 +14,7 @@ func CastProcessUserMessageReq2Params(req *def.ProcessUserMessageRequest) *types
 	return &types.ProcessUserMessageParams{
 		ConversationID: req.ConversationID,
 		Message:        req.Content,
+		MapData:        req.MapData,
 	}
 }
 
@@ -22,8 +23,9 @@ func CastSaveNewConversationReq2Params(req *def.SaveNewConversationRequest) *typ
 		return nil
 	}
 	return &types.SaveNewConversationParams{
-		Title: req.Title,
-		MapID: req.MapID,
+		Title:   req.Title,
+		MapID:   req.MapID,
+		MapData: req.MapData,
 	}
 }
 
@@ -81,5 +83,15 @@ func CastUpdateConversationTitleReq2Params(req *def.UpdateConversationTitleReque
 	return &types.UpdateConversationTitleParams{
 		Title:          req.Title,
 		ConversationID: req.ConversationID,
+	}
+}
+
+func CastGenerateMindMapReq2Params(req *def.GenerateMindMapRequest) *types.GenerateMindMapParams {
+	if req == nil {
+		return nil
+	}
+	return &types.GenerateMindMapParams{
+		Text: req.Text,
+		File: req.File,
 	}
 }

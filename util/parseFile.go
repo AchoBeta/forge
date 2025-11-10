@@ -1,4 +1,4 @@
-package mindmapservice
+package util
 
 import (
 	"context"

@@ -114,3 +114,14 @@ func CastUpdateAccountReq2Params(req *def.UpdateAccountReq) *types.UpdateAccount
 		Password:    req.Password,
 	}
 }
+
+// CastUnbindAccountReq2Params： DTO -> Service 层参数表单转换
+func CastUnbindAccountReq2Params(req *def.UnbindAccountReq) *types.UnbindAccountParams {
+	if req == nil {
+		return nil
+	}
+	return &types.UnbindAccountParams{
+		Account:     req.Account,
+		AccountType: req.AccountType,
+	}
+}
