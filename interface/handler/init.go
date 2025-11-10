@@ -38,6 +38,7 @@ type IHandler interface {
 	DelConversation(ctx context.Context, req *def.DelConversationRequest) (*def.DelConversationResponse, error)
 	GetConversation(ctx context.Context, req *def.GetConversationRequest) (*def.GetConversationResponse, error)
 	UpdateConversationTitle(ctx context.Context, req *def.UpdateConversationTitleRequest) (*def.UpdateConversationTitleResponse, error)
+	GenerateMindMap(ctx context.Context, req *def.GenerateMindMapRequest) (*def.GenerateMindMapResponse, error)
 }
 
 var handler IHandler

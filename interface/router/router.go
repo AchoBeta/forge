@@ -165,4 +165,9 @@ func loadAiChat(r *gin.RouterGroup) {
 	//更新某个会话的标题
 	// [POST] /api/biz/v1/aichat/update_conversation_title
 	r.Handle(POST, "update_conversation_title", UpdateConversationTitle())
+
+	//生成导图
+	// [POST] /api/biz/v1/aichat/generate_mind_map
+	// 表单名称 file
+	r.Handle(POST, "generate_mind_map", GenerateMindMap())
 }

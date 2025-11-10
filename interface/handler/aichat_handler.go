@@ -17,8 +17,9 @@ func (h *Handler) SendMessage(ctx context.Context, req *def.ProcessUserMessageRe
 	}
 
 	resp := &def.ProcessUserMessageResponse{
-		Content: aiMsg,
-		Success: true,
+		Content:    aiMsg.Content,
+		NewMapJson: aiMsg.NewMapJson,
+		Success:    true,
 	}
 
 	return resp, nil
@@ -27,13 +28,14 @@ func (h *Handler) SendMessage(ctx context.Context, req *def.ProcessUserMessageRe
 func (h *Handler) SaveNewConversation(ctx context.Context, req *def.SaveNewConversationRequest) (*def.SaveNewConversationResponse, error) {
 	params := caster.CastSaveNewConversationReq2Params(req)
 
-	err := h.AiChatService.SaveNewConversation(ctx, params)
+	conversationID, err := h.AiChatService.SaveNewConversation(ctx, params)
 	if err != nil {
 		return nil, err
 	}
 
 	resp := &def.SaveNewConversationResponse{
-		Success: true,
+		ConversationID: conversationID,
+		Success:        true,
 	}
 	return resp, nil
 }
@@ -97,6 +99,21 @@ func (h *Handler) UpdateConversationTitle(ctx context.Context, req *def.UpdateCo
 
 	resp := &def.UpdateConversationTitleResponse{
 		Success: true,
+	}
+	return resp, nil
+}
+
+func (h *Handler) GenerateMindMap(ctx context.Context, req *def.GenerateMindMapRequest) (*def.GenerateMindMapResponse, error) {
+	params := caster.CastGenerateMindMapReq2Params(req)
+
+	res, err := h.AiChatService.GenerateMindMap(ctx, params)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &def.GenerateMindMapResponse{
+		Success: true,
+		MapJson: res,
 	}
 	return resp, nil
 }

@@ -261,3 +261,61 @@ func UpdateConversationTitle() gin.HandlerFunc {
 		}
 	}
 }
+
+func GenerateMindMap() gin.HandlerFunc {
+	return func(gCtx *gin.Context) {
+		var req def.GenerateMindMapRequest
+		ctx := gCtx.Request.Context()
+
+		contentType := gCtx.ContentType()
+
+		if contentType == "application/json" {
+			if err := gCtx.ShouldBindJSON(&req); err != nil {
+				gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+					Code:    response.PARAM_NOT_COMPLETE.Code,
+					Message: response.PARAM_NOT_COMPLETE.Msg,
+					Data:    def.GenerateMindMapResponse{Success: false},
+				})
+				return
+			}
+		} else if contentType == "multipart/form-data" {
+			file, err := gCtx.FormFile("file")
+			if err != nil {
+				gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+					Code:    response.INTERNAL_FILE_UPLOAD_ERROR.Code,
+					Message: response.INTERNAL_FILE_UPLOAD_ERROR.Msg + err.Error(),
+					Data:    def.GenerateMindMapResponse{Success: false},
+				})
+				return
+			}
+			req.File = file
+		} else {
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    response.INVALID_CONTENT_TYPE.Code,
+				Message: response.INVALID_CONTENT_TYPE.Msg,
+				Data:    def.GenerateMindMapResponse{Success: false},
+			})
+			return
+		}
+
+		resp, err := handler.GetHandler().GenerateMindMap(ctx, &req)
+		zlog.CtxAllInOne(ctx, "generate_mind_map", map[string]interface{}{"req": req}, resp, err)
+
+		r := response.NewResponse(gCtx)
+		if err != nil {
+			msgCode := aiChatServiceErrorToMsgCode(err)
+			if msgCode == response.COMMON_FAIL {
+				msgCode.Msg = err.Error()
+			}
+			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
+				Code:    msgCode.Code,
+				Message: msgCode.Msg,
+				Data:    def.GenerateMindMapResponse{Success: false},
+			})
+			return
+		} else {
+			r.Success(resp)
+		}
+
+	}
+}
