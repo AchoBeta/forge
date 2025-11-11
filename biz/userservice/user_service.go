@@ -1044,49 +1044,74 @@ func (u *UserServiceImpl) OAuthLogin(ctx context.Context, provider string, gothU
 	} else {
 		// 用户已存在，更新最后登录时间和相关信息
 		now := time.Now()
-		updateInfo := &repo.UserUpdateInfo{
+
+		// 关键更新：最后登录时间和第三方ID（这些是登录流程的核心数据）
+		criticalUpdateInfo := &repo.UserUpdateInfo{
 			UserID:      user.UserID,
 			LastLoginAt: &now,
 		}
 
-		// 更新头像（如果第三方头像更新了）
-		if gothUser.AvatarURL != "" && gothUser.AvatarURL != user.Avatar {
-			updateInfo.Avatar = &gothUser.AvatarURL
-		}
-
-		// 更新第三方账号信息（如果变化）
+		// 更新第三方账号ID（如果变化）- 这是关键信息
 		switch provider {
 		case "github":
 			if gothUser.UserID != user.GithubID {
-				updateInfo.GithubID = &gothUser.UserID
+				criticalUpdateInfo.GithubID = &gothUser.UserID
 			}
+		case "wechat":
+			if gothUser.UserID != user.WechatOpenID {
+				criticalUpdateInfo.WechatOpenID = &gothUser.UserID
+			}
+			// unionid 也是关键信息，用于跨应用识别
+			if unionid, ok := gothUser.RawData["unionid"].(string); ok && unionid != "" && unionid != user.WechatUnionID {
+				criticalUpdateInfo.WechatUnionID = &unionid
+			}
+		}
+
+		// 先更新关键信息，如果失败则返回错误
+		if err := u.userRepo.UpdateUser(ctx, criticalUpdateInfo); err != nil {
+			zlog.CtxErrorf(ctx, "update critical user info failed (lastLoginAt/thirdPartyID): %v", err)
+			return nil, "", ErrInternalError
+		}
+
+		// 非关键更新：头像、用户名、邮箱等（这些失败不影响登录）
+		nonCriticalUpdateInfo := &repo.UserUpdateInfo{
+			UserID: user.UserID,
+		}
+
+		// 更新头像（如果第三方头像更新了）
+		if gothUser.AvatarURL != "" && gothUser.AvatarURL != user.Avatar {
+			nonCriticalUpdateInfo.Avatar = &gothUser.AvatarURL
+		}
+
+		// 更新第三方账号的非关键信息（如果变化）
+		switch provider {
+		case "github":
 			githubLogin := gothUser.NickName
 			if githubLogin == "" {
 				githubLogin = gothUser.Name
 			}
 			if githubLogin != "" && githubLogin != user.GithubLogin {
-				updateInfo.GithubLogin = &githubLogin
+				nonCriticalUpdateInfo.GithubLogin = &githubLogin
 			}
 			// 如果 GitHub 用户有邮箱且用户当前没有邮箱，更新邮箱
 			if gothUser.Email != "" && user.Email == "" {
-				updateInfo.Email = &gothUser.Email
+				nonCriticalUpdateInfo.Email = &gothUser.Email
 				emailVerified := true
-				updateInfo.EmailVerified = &emailVerified
-			}
-		case "wechat":
-			if gothUser.UserID != user.WechatOpenID {
-				updateInfo.WechatOpenID = &gothUser.UserID
-			}
-			// 更新 unionid（如果有）
-			if unionid, ok := gothUser.RawData["unionid"].(string); ok && unionid != "" && unionid != user.WechatUnionID {
-				updateInfo.WechatUnionID = &unionid
+				nonCriticalUpdateInfo.EmailVerified = &emailVerified
 			}
 		}
 
-		// 更新用户信息
-		if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
-			zlog.CtxWarnf(ctx, "update user info failed: %v", err)
-			// 不返回错误，继续登录流程
+		// 检查是否有非关键信息需要更新
+		hasNonCriticalUpdate := nonCriticalUpdateInfo.Avatar != nil ||
+			nonCriticalUpdateInfo.GithubLogin != nil ||
+			nonCriticalUpdateInfo.Email != nil
+
+		// 更新非关键信息，失败时只记录警告，不影响登录
+		if hasNonCriticalUpdate {
+			if err := u.userRepo.UpdateUser(ctx, nonCriticalUpdateInfo); err != nil {
+				zlog.CtxWarnf(ctx, "update non-critical user info failed (avatar/username/email): %v", err)
+				// 不返回错误，继续登录流程
+			}
 		}
 
 		zlog.CtxInfof(ctx, "oauth user login: userID=%s, provider=%s", user.UserID, provider)
