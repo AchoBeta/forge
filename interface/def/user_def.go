@@ -91,6 +91,10 @@ type GetHomeResp struct {
 	Phone       string `json:"phone,omitempty"`  // 手机号
 	Email       string `json:"email,omitempty"`  // 邮箱
 	HasPassword bool   `json:"has_password"`     // 是否有密码
+	// 第三方登录信息
+	HasGithub   bool   `json:"has_github"`             // 是否绑定 GitHub
+	GithubLogin string `json:"github_login,omitempty"` // GitHub 用户名
+	HasWechat   bool   `json:"has_wechat"`             // 是否绑定微信
 }
 
 //---------更新联系方式（绑定/换绑）-----------
@@ -108,12 +112,31 @@ type UpdateAccountResp struct {
 
 //---------解绑联系方式-----------
 type UnbindAccountReq struct {
-	Account     string `json:"account"`      // 需要解绑的手机号/邮箱
-	AccountType string `json:"account_type"` // 账号类型：phone（手机号）或 email（邮箱）
+	Account     string `json:"account,omitempty"` // 需要解绑的手机号/邮箱（解绑第三方账号时可为空）
+	AccountType string `json:"account_type"`      // 账号类型：phone（手机号）、email（邮箱）、github（GitHub）、wechat（微信）
 }
 
 type UnbindAccountResp struct {
 	Success bool `json:"success"` // 解绑是否成功
+}
+
+//---------第三方登录相关-----------
+type OAuthCallbackResp struct {
+	Success  bool   `json:"success"`             // 登录是否成功
+	Token    string `json:"token,omitempty"`     // JWT token
+	UserID   string `json:"user_id,omitempty"`   // 用户ID
+	UserName string `json:"user_name,omitempty"` // 用户名
+	Avatar   string `json:"avatar,omitempty"`    // 头像
+	Phone    string `json:"phone,omitempty"`     // 手机号
+	Email    string `json:"email,omitempty"`     // 邮箱
+}
+
+type OAuthProvider struct {
+	Name string `json:"name"` // Provider 名称（github、wechat 等）
+}
+
+type GetOAuthProvidersResp struct {
+	Providers []OAuthProvider `json:"providers"` // 可用的 OAuth 提供商列表
 }
 
 //---------第三方--------- 暂时先不做

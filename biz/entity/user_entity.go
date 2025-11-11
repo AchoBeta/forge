@@ -30,6 +30,12 @@ type User struct {
 	PhoneVerified bool `json:"phone_verified"` // 手机号是否已验证
 	EmailVerified bool `json:"email_verified"` // 邮箱是否已验证
 
+	// 第三方登录
+	GithubID      string `json:"github_id,omitempty"`      // GitHub 用户 ID
+	GithubLogin   string `json:"github_login,omitempty"`   // GitHub 用户名
+	WechatOpenID  string `json:"wechat_open_id,omitempty"` // 微信 openid
+	WechatUnionID string `json:"wechat_union_id,omitempty"` // 微信 unionid（开放平台）
+
 	Dogs []*Dog
 	// ... ex
 }

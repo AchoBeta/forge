@@ -45,6 +45,10 @@ func register() (router *gin.Engine) {
 	userGroup := r.Group("user")
 	loadUserService(userGroup)
 
+	// OAuth 第三方登录路由（不需要JWT）
+	authGroup := r.Group("auth")
+	loadOAuthService(authGroup)
+
 	// 用户服务：需要JWT鉴权的路由（更新头像, 查看个人主页，更新联系方式）
 	userAuthGroup := r.Group("user", jwtAuthMiddleware)
 	loadUserAuthService(userAuthGroup)

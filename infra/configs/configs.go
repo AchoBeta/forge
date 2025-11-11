@@ -20,6 +20,7 @@ type IConfig interface {
 	GetCOSConfig() COSConfig
 	GetAiChatConfig() AiChatConfig
 	GetSMSConfig() SMSConfig
+	GetOAuthConfig() OAuthConfig // OAuth 第三方登录配置
 }
 
 var (
@@ -76,6 +77,9 @@ func (c *config) GetAiChatConfig() AiChatConfig { return c.AiChatConfig }
 // sms配置读取
 func (c *config) GetSMSConfig() SMSConfig { return c.SMSConfig }
 
+// oauth配置读取
+func (c *config) GetOAuthConfig() OAuthConfig { return c.OAuthConfig }
+
 func mustInit(path string) *config {
 	// 初始化时间为东八区的时间
 	var cstZone = time.FixedZone("CST", 8*3600) // 东八
@@ -126,6 +130,7 @@ type config struct {
 	COSConfig       COSConfig         `mapstructure:"cos"`
 	AiChatConfig    AiChatConfig      `mapstructure:"ai_client"`
 	SMSConfig       SMSConfig         `mapstructure:"sms"`
+	OAuthConfig     OAuthConfig       `mapstructure:"oauth"`
 }
 
 type ApplicationConfig struct {
@@ -198,4 +203,15 @@ type AiChatConfig struct {
 type SMSConfig struct {
 	Key      string `mapstructure:"key"`
 	Endpoint string `mapstructure:"endpoint"`
+}
+
+// OAuthConfig OAuth 第三方登录配置
+type OAuthConfig struct {
+	GitHubClientID     string `mapstructure:"github_client_id"`
+	GitHubClientSecret string `mapstructure:"github_client_secret"`
+	GitHubCallbackURL  string `mapstructure:"github_callback_url"`
+	WechatAppID        string `mapstructure:"wechat_app_id"`
+	WechatAppSecret    string `mapstructure:"wechat_app_secret"`
+	WechatCallbackURL  string `mapstructure:"wechat_callback_url"`
+	SessionSecret      string `mapstructure:"session_secret"`
 }

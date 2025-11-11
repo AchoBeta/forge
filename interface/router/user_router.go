@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forge/biz/cosservice"
+	"forge/biz/types"
 	"forge/biz/userservice"
 
 	// "forge/constant"
@@ -362,4 +363,31 @@ func UpdateAvatar() gin.HandlerFunc {
 		}
 		r.Success(rsp)
 	}
+}
+
+// loadOAuthService 加载 OAuth 第三方登录路由
+func loadOAuthService(r *gin.RouterGroup) {
+	// 获取 UserService（从 handler 中获取）
+	h := handler.GetHandler()
+	// 使用类型断言获取 UserService
+	var userService types.IUserService
+	if hHandler, ok := h.(*handler.Handler); ok {
+		userService = hHandler.UserService
+	}
+
+	// GitHub OAuth
+	// [GET] /api/biz/v1/auth/github
+	r.Handle(GET, "github", handler.OAuthBegin("github"))
+	// [GET] /api/biz/v1/auth/github/callback
+	r.Handle(GET, "github/callback", handler.OAuthCallback(userService, "github"))
+
+	// 微信 OAuth
+	// [GET] /api/biz/v1/auth/wechat
+	r.Handle(GET, "wechat", handler.OAuthBegin("wechat"))
+	// [GET] /api/biz/v1/auth/wechat/callback
+	r.Handle(GET, "wechat/callback", handler.OAuthCallback(userService, "wechat"))
+
+	// 获取可用的 OAuth 提供商列表
+	// [GET] /api/biz/v1/auth/providers
+	r.Handle(GET, "providers", handler.GetOAuthProviders())
 }
