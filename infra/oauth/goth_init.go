@@ -1,6 +1,7 @@
 package oauth
 
 import (
+	"crypto/sha256"
 	"net/http"
 
 	"github.com/gorilla/sessions"
@@ -39,43 +40,47 @@ func InitGoth(oauthConfig configs.OAuthConfig) {
 		zlog.Infof("微信 OAuth Provider 初始化成功")
 	}
 
+	// 获取应用环境配置（用于安全检查）
+	appConfig := configs.Config().GetAppConfig()
+
 	// 配置 Session Store
 	if oauthConfig.SessionSecret == "" {
-		zlog.Warnf("OAuth session_secret 未配置，使用默认值（仅开发环境）")
+		// 生产环境必须配置 session_secret，否则 panic（安全漏洞）
+		if appConfig.Env != "dev" {
+			zlog.Panicf("CRITICAL: OAuth session_secret is not configured in a non-development environment (env=%s). This is a security vulnerability.", appConfig.Env)
+		}
+		// 开发环境允许使用默认值（但不安全）
+		zlog.Warnf("OAuth session_secret is not configured, using a default insecure key. This is for development only (env=%s).", appConfig.Env)
 		oauthConfig.SessionSecret = "default-session-secret-change-in-production-min-32-chars"
 	}
 
-	// gorilla/sessions 的 NewCookieStore 可以接受一个或多个密钥
-	// 如果只有一个密钥，它会被用于认证和加密
-	// 建议使用至少 32 字节的密钥
+	// 使用哈希函数从提供的 secret 生成固定长度的强密钥
+	// 为认证和加密派生不同的密钥以提高安全性
+	// 这样可以确保无论用户提供的密钥长度如何，都能生成固定长度（32字节）的强密钥
 	secretBytes := []byte(oauthConfig.SessionSecret)
 
-	// 如果密钥长度不足 32 字节，使用哈希扩展
+	// 为认证密钥生成 SHA-256 哈希（32字节）
+	authKeyHash := sha256.Sum256(secretBytes)
+
+	// 为加密密钥生成不同的 SHA-256 哈希（通过在原始密钥后追加特定字符串）
+	// 这样可以确保认证和加密使用不同的密钥，提高安全性
+	encKeyBytes := append(secretBytes, []byte("-encryption")...)
+	encKeyHash := sha256.Sum256(encKeyBytes)
+
+	// 如果用户提供的密钥长度不足 32 字节，记录警告
 	if len(secretBytes) < 32 {
-		zlog.Warnf("OAuth session_secret 长度不足32字节，使用扩展密钥")
-		// 重复密钥直到达到 32 字节
-		extended := make([]byte, 0, 64)
-		for len(extended) < 64 {
-			extended = append(extended, secretBytes...)
-		}
-		secretBytes = extended[:64] // 使用 64 字节的密钥（更安全）
-	} else if len(secretBytes) < 64 {
-		// 如果密钥长度在 32-64 字节之间，扩展到 64 字节
-		extended := make([]byte, 64)
-		copy(extended, secretBytes)
-		for i := len(secretBytes); i < 64; i++ {
-			extended[i] = secretBytes[i%len(secretBytes)]
-		}
-		secretBytes = extended
+		zlog.Warnf("OAuth session_secret 长度不足32字节（当前: %d字节），已使用 SHA-256 哈希生成强密钥", len(secretBytes))
 	}
 
 	// 使用密钥创建 CookieStore
-	// 可以传入多个密钥，第一个用于认证，第二个用于加密（如果提供）
-	store := sessions.NewCookieStore(secretBytes)
+	// 传入两个密钥：第一个用于认证，第二个用于加密
+	// 每个密钥都是 32 字节的 SHA-256 哈希值，安全性更高
+	store := sessions.NewCookieStore(authKeyHash[:], encKeyHash[:])
 	store.MaxAge(86400 * 30) // 30天
 	store.Options.Path = "/"
 	store.Options.HttpOnly = true
-	store.Options.Secure = false                  // 生产环境改为 true (HTTPS)
+	// 生产环境必须使用 HTTPS，Secure 设置为 true
+	store.Options.Secure = appConfig.Env != "dev"
 	store.Options.SameSite = http.SameSiteLaxMode // Lax 模式允许 GET 请求跨站发送 Cookie（适合 OAuth 回调）
 
 	gothic.Store = store

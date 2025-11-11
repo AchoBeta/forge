@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"forge/biz/cosservice"
-	"forge/biz/types"
 	"forge/biz/userservice"
 
 	// "forge/constant"
@@ -370,10 +369,16 @@ func loadOAuthService(r *gin.RouterGroup) {
 	// 获取 UserService（从 handler 中获取）
 	h := handler.GetHandler()
 	// 使用类型断言获取 UserService
-	var userService types.IUserService
-	if hHandler, ok := h.(*handler.Handler); ok {
-		userService = hHandler.UserService
+	hHandler, ok := h.(*handler.Handler)
+	if !ok || hHandler == nil {
+		// 如果类型断言失败或 handler 为 nil，这是严重的服务初始化问题，应该直接 panic
+		zlog.Panicf("CRITICAL: Handler is not initialized or is not of type *handler.Handler")
 	}
+	if hHandler.UserService == nil {
+		// 如果 UserService 为 nil，这是严重的服务初始化问题，应该直接 panic
+		zlog.Panicf("CRITICAL: UserService is not initialized in handler")
+	}
+	userService := hHandler.UserService
 
 	// GitHub OAuth
 	// [GET] /api/biz/v1/auth/github

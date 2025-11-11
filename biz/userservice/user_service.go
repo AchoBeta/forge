@@ -985,9 +985,25 @@ func (u *UserServiceImpl) OAuthLogin(ctx context.Context, provider string, gothU
 			return nil, "", ErrInternalError
 		}
 
+		// 确定用户名：优先使用 Name，如果为空则使用 NickName，如果还是为空则使用默认值
+		userName := gothUser.Name
+		if userName == "" {
+			userName = gothUser.NickName
+		}
+		if userName == "" {
+			// 如果 Name 和 NickName 都为空，使用 provider 和 UserID 生成默认用户名
+			// 安全地截取 UserID（最多取前8个字符，如果长度不足则使用全部）
+			userIDPrefix := gothUser.UserID
+			if len(userIDPrefix) > 8 {
+				userIDPrefix = userIDPrefix[:8]
+			}
+			userName = fmt.Sprintf("%s_user_%s", provider, userIDPrefix)
+			zlog.CtxWarnf(ctx, "gothUser.Name and NickName are both empty, using default username: %s", userName)
+		}
+
 		user = &entity.User{
 			UserID:   userID,
-			UserName: gothUser.Name,
+			UserName: userName,
 			Avatar:   gothUser.AvatarURL,
 			Status:   entity.UserStatusActive,
 		}
@@ -999,8 +1015,11 @@ func (u *UserServiceImpl) OAuthLogin(ctx context.Context, provider string, gothU
 			// GitHub 的 NickName 是 login（用户名），Name 是显示名称
 			if gothUser.NickName != "" {
 				user.GithubLogin = gothUser.NickName
-			} else {
+			} else if gothUser.Name != "" {
 				user.GithubLogin = gothUser.Name
+			} else {
+				// 如果都没有，使用 UserID 的一部分作为 login
+				user.GithubLogin = gothUser.UserID
 			}
 			// GitHub 用户可能有邮箱
 			if gothUser.Email != "" {
