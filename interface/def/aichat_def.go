@@ -59,9 +59,10 @@ type GetConversationRequest struct {
 }
 
 type GetConversationResponse struct {
-	Title    string            `json:"title"`
-	Messages []*entity.Message `json:"messages"`
-	Success  bool              `json:"success"`
+	Title          string            `json:"title"`
+	Messages       []*entity.Message `json:"messages"`
+	ConversationID string            `json:"conversation_id"`
+	Success        bool              `json:"success"`
 }
 
 type UpdateConversationTitleRequest struct {
