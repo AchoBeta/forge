@@ -47,5 +47,4 @@ func initToolUpdateMindMap(mapData, requirement string) []*schema.Message {
 
 type UpdateMindMapParams struct {
 	Requirement string `json:"requirement" jsonschema:"description=更改导图的要求"`
-	MapJson     string `json:"map_json" jsonschema:"description=当前最新的导图json数据,不要注释、不要 Markdown 包裹"`
 }
