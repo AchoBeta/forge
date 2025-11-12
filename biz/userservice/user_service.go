@@ -6,6 +6,10 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"net"
+	"net/url"
+	"path"
+	"strings"
 	"time"
 
 	"forge/biz/adapter"
@@ -37,28 +41,34 @@ var (
 	ErrPermissionDenied = errors.New("permission denied")
 	// ErrVerificationCodeIncorrect 表示验证码错误
 	ErrVerificationCodeIncorrect = errors.New("verification code incorrect")
+	// ErrAccountAlreadyInUse 表示账号（手机号/邮箱）已被使用
+	ErrAccountAlreadyInUse = errors.New("account already in use")
+	ErrEmailAlreadyInUse   = ErrAccountAlreadyInUse
+	// ErrPasswordRequired 表示密码必填
+	ErrPasswordRequired        = errors.New("password required")
+	ErrCannotUnbindOnlyContact = errors.New("cannot unbind only contact")
 )
 
 // 最好的设计方案：
 // infra的所有函数都是通过接口来用的
 
 type UserServiceImpl struct {
-	userRepo     repo.UserRepo
-	cozeService  adapter.CozeService
-	jwtUtil      *util.JWTUtil
-	emailService adapter.EmailService
+	userRepo    repo.UserRepo
+	cozeService adapter.CozeService
+	jwtUtil     *util.JWTUtil
+	codeService adapter.CodeService
 }
 
 func NewUserServiceImpl(
 	userRepo repo.UserRepo,
 	cozeService adapter.CozeService,
 	jwtUtil *util.JWTUtil,
-	emailService adapter.EmailService) *UserServiceImpl {
+	codeService adapter.CodeService) *UserServiceImpl {
 	return &UserServiceImpl{
-		userRepo:     userRepo,
-		cozeService:  cozeService,
-		jwtUtil:      jwtUtil,
-		emailService: emailService,
+		userRepo:    userRepo,
+		cozeService: cozeService,
+		jwtUtil:     jwtUtil,
+		codeService: codeService,
 	}
 }
 
@@ -160,7 +170,7 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 	}
 
 	// 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return nil, err
 	}
 
@@ -193,10 +203,11 @@ func (u *UserServiceImpl) Register(ctx context.Context, req *types.RegisterParam
 		Password: hash,
 		// 根据 accountType 填写登录方式字段
 	}
-	if req.AccountType == types.AccountTypePhone {
+	switch req.AccountType {
+	case types.AccountTypePhone:
 		user.Phone = req.Account
 		user.PhoneVerified = true
-	} else if req.AccountType == types.AccountTypeEmail {
+	case types.AccountTypeEmail:
 		user.Email = req.Account
 		user.EmailVerified = true
 	}
@@ -268,8 +279,8 @@ func (u *UserServiceImpl) ResetPassword(ctx context.Context, req *types.ResetPas
 		return err
 	}
 
-	// 4. 校验验证码 code（短信/邮箱）
-	if err := u.verifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+	// 校验验证码 code（短信/邮箱）
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
 		return err
 	}
 
@@ -332,17 +343,63 @@ func (u *UserServiceImpl) GetUserByID(ctx context.Context, userID string) (*enti
 }
 
 // SendVerificationCode 发送验证码
-func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType string) error {
+func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, accountType, purpose string) error {
 	// 参数校验
 	if account == "" || accountType == "" {
 		zlog.CtxErrorf(ctx, "invalid params for send verification code")
 		return ErrInvalidParams
 	}
 
-	// 目前只支持邮箱验证码
-	if accountType != types.AccountTypeEmail {
-		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
-		return ErrUnsupportedAccountType
+	// 根据使用场景进行账号验证
+	// 注册 换绑需要提供未被使用的账号   重置密码需要提供用户自己的 存在的账号
+	switch purpose {
+	case types.PurposeRegister:
+		// 注册场景：账号应该不存在，如果已存在则返回错误
+		_, err := u.findUserByAccount(ctx, account, accountType)
+		if err != nil {
+			// 如果是用户不存在的错误，说明账号未被使用，可以继续发送验证码
+			if !errors.Is(err, ErrUserNotFound) {
+				// 其他错误（数据库错误等），返回内部错误
+				zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+				return ErrInternalError
+			}
+			// ErrUserNotFound 表示账号未被使用，可以继续
+		} else {
+			// 账号已被使用，返回错误
+			// 当 err == nil 时，说明找到了用户（findUserByAccount 保证）
+			zlog.CtxWarnf(ctx, "account already in use for register: %s (type: %s)", account, accountType)
+			return ErrAccountAlreadyInUse
+		}
+
+	case types.PurposeResetPassword:
+		// 重置密码场景：账号应该存在，如果不存在则返回错误
+		_, err := u.findUserByAccount(ctx, account, accountType)
+		if err != nil {
+			if errors.Is(err, ErrUserNotFound) {
+				// 用户不存在，返回错误
+				zlog.CtxWarnf(ctx, "user not found for reset password: %s (type: %s)", account, accountType)
+				return ErrUserNotFound
+			}
+			// 其他错误（数据库错误等），返回内部错误
+			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+			return ErrInternalError
+		}
+		// err == nil 时，说明用户存在（findUserByAccount 保证）
+
+	case types.PurposeChangeAccount:
+		// 换绑联系方式场景：需要从context获取当前用户，检查新账号是否被其他用户使用
+		currentUser, ok := entity.GetUser(ctx)
+		if !ok {
+			zlog.CtxErrorf(ctx, "user not found in context for change account")
+			return ErrPermissionDenied
+		}
+		if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, account, accountType); err != nil {
+			return err
+		}
+
+	default:
+		// 未指定场景或未知场景，不进行验证（向后兼容）
+		zlog.CtxWarnf(ctx, "unknown purpose for send verification code: %s, skipping validation", purpose)
 	}
 
 	// 生成6位随机验证码
@@ -356,10 +413,26 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 		zlog.CtxErrorf(ctx, "存储验证码到Redis失败: %v", err)
 		return ErrInternalError
 	}
-	// 发送邮件
-	if err := u.emailService.SendVerificationCode(ctx, account, code); err != nil {
-		zlog.CtxErrorf(ctx, "send verification code failed: %v", err)
-		// 邮件发送失败，尝试从Redis中删除已存储的验证码，以保持一致性
+
+	var (
+		sendFunc func(context.Context, string, string) error
+		errorLog string
+	)
+
+	switch accountType {
+	case types.AccountTypeEmail:
+		sendFunc = u.codeService.SendEmailCode
+		errorLog = "send verification code failed"
+	case types.AccountTypePhone:
+		sendFunc = u.codeService.SendSMSCode
+		errorLog = "send sms verification code failed"
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type for verification: %s", accountType)
+		return ErrUnsupportedAccountType
+	}
+
+	if err := sendFunc(ctx, account, code); err != nil {
+		zlog.CtxErrorf(ctx, "%s: %v", errorLog, err)
 		if delErr := cache.DelRedis(ctx, key); delErr != nil {
 			zlog.CtxErrorf(ctx, "删除Redis中未发送成功的验证码失败: %v", delErr)
 		}
@@ -370,7 +443,7 @@ func (u *UserServiceImpl) SendVerificationCode(ctx context.Context, account, acc
 }
 
 // VerifyCode 校验验证码
-func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, code string) error {
+func (u *UserServiceImpl) VerifyCode(ctx context.Context, account, accountType, code string) error {
 	if account == "" || code == "" {
 		return ErrInvalidParams
 	}
@@ -402,6 +475,191 @@ func (u *UserServiceImpl) verifyCode(ctx context.Context, account, accountType, 
 	return nil
 }
 
+// checkAccountAvailabilityForUpdate 检查账号是否可用于更新（换绑/绑定）
+// 检查新账号是否被其他用户使用，如果是当前用户自己的账号则允许
+func (u *UserServiceImpl) checkAccountAvailabilityForUpdate(ctx context.Context, currentUser *entity.User, account, accountType string) error {
+	existingUser, err := u.findUserByAccount(ctx, account, accountType)
+	if err != nil {
+		// 如果是用户不存在的错误，说明新账号未被使用，可以继续
+		if !errors.Is(err, ErrUserNotFound) {
+			// 其他错误（数据库错误等），返回内部错误
+			zlog.CtxErrorf(ctx, "failed to check if account exists: %v", err)
+			return ErrInternalError
+		}
+		// ErrUserNotFound 表示新账号未被使用，可以继续
+		return nil
+	}
+
+	// 找到用户，检查是否是当前用户自己的账号
+	// 当 err == nil 时，existingUser 一定不为 nil（findUserByAccount 保证）
+	if existingUser.UserID != currentUser.UserID {
+		// 被其他用户使用，返回错误
+		zlog.CtxWarnf(ctx, "account already in use by another user: %s (type: %s)", account, accountType)
+		return ErrAccountAlreadyInUse
+	}
+	// 是自己的账号，可以继续（允许用户重新验证自己的账号）
+
+	return nil
+}
+
+// UpdateAccount 更新联系方式（绑定/换绑手机号或邮箱）
+func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAccountParams) (string, error) {
+	// 参数校验
+	if req == nil {
+		zlog.CtxErrorf(ctx, "update account request is nil")
+		return "", ErrInvalidParams
+	}
+	if req.Account == "" || req.AccountType == "" || req.Code == "" {
+		zlog.CtxErrorf(ctx, "invalid params for update account: missing required fields")
+		return "", ErrInvalidParams
+	}
+
+	// 从context获取当前用户（JWT中间件已注入）
+	currentUser, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context, this should not happen if JWT middleware works correctly")
+		return "", ErrPermissionDenied
+	}
+
+	// 判断用户是否有密码
+	hasPassword := currentUser.Password != ""
+	if !hasPassword && req.Password == "" {
+		zlog.CtxErrorf(ctx, "password required for user without password: %s", currentUser.UserID)
+		return "", ErrPasswordRequired
+	}
+
+	// 验证验证码（验证发送到新联系方式的验证码）
+	if err := u.VerifyCode(ctx, req.Account, req.AccountType, req.Code); err != nil {
+		return "", err
+	}
+
+	// 检查新联系方式是否被其他用户使用
+	if err := u.checkAccountAvailabilityForUpdate(ctx, currentUser, req.Account, req.AccountType); err != nil {
+		return "", err
+	}
+
+	// 准备更新信息
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: currentUser.UserID,
+	}
+
+	// 更新联系方式
+	trueValue := true
+	switch req.AccountType {
+	case types.AccountTypePhone:
+		updateInfo.Phone = &req.Account
+		updateInfo.PhoneVerified = &trueValue
+	case types.AccountTypeEmail:
+		updateInfo.Email = &req.Account
+		updateInfo.EmailVerified = &trueValue
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type: %s", req.AccountType)
+		return "", ErrUnsupportedAccountType
+	}
+
+	// 如果传了密码，更新密码
+	if req.Password != "" {
+		// 验证密码强度
+		if err := util.ValidatePasswordStrength(req.Password); err != nil {
+			zlog.CtxErrorf(ctx, "password strength validation failed: %v", err)
+			return "", err
+		}
+
+		// 加密密码
+		hash, err := util.HashPassword(req.Password)
+		if err != nil {
+			zlog.CtxErrorf(ctx, "hash password failed: %v", err)
+			return "", ErrInternalError
+		}
+		updateInfo.Password = &hash
+	}
+
+	// 更新用户信息
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update account failed: %v", err)
+		return "", ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "account updated successfully, userID: %s, new account: %s", currentUser.UserID, req.Account)
+	return req.Account, nil
+}
+
+// UnbindAccount 解绑联系方式（手机号/邮箱）
+func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAccountParams) error {
+	// 参数校验
+	if req == nil {
+		zlog.CtxErrorf(ctx, "unbind account request is nil")
+		return ErrInvalidParams
+	}
+	if req.Account == "" || req.AccountType == "" {
+		zlog.CtxErrorf(ctx, "invalid params for unbind account: missing required fields")
+		return ErrInvalidParams
+	}
+
+	// 获取当前用户
+	currentUser, ok := entity.GetUser(ctx)
+	if !ok {
+		zlog.CtxErrorf(ctx, "user not found in context for unbind account")
+		return ErrPermissionDenied
+	}
+
+	// 准备更新信息
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: currentUser.UserID,
+	}
+	falseValue := false
+	emptyString := ""
+
+	var (
+		currentContact string
+		otherContact   string
+		accountLabel   string
+	)
+
+	switch req.AccountType {
+	case types.AccountTypePhone:
+		currentContact = currentUser.Phone
+		otherContact = currentUser.Email
+		accountLabel = "phone"
+	case types.AccountTypeEmail:
+		currentContact = currentUser.Email
+		otherContact = currentUser.Phone
+		accountLabel = "email"
+	default:
+		zlog.CtxErrorf(ctx, "unsupported account type for unbind: %s", req.AccountType)
+		return ErrUnsupportedAccountType
+	}
+
+	if currentContact == "" {
+		zlog.CtxErrorf(ctx, "%s is not bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrInvalidParams
+	}
+	if req.Account != currentContact {
+		zlog.CtxErrorf(ctx, "%s mismatch for unbind, userID: %s, request %s: %s", accountLabel, currentUser.UserID, accountLabel, req.Account)
+		return ErrInvalidParams
+	}
+	if otherContact == "" {
+		zlog.CtxErrorf(ctx, "cannot unbind %s, no other contact bound, userID: %s", accountLabel, currentUser.UserID)
+		return ErrCannotUnbindOnlyContact
+	}
+
+	if req.AccountType == types.AccountTypePhone {
+		updateInfo.Phone = &emptyString
+		updateInfo.PhoneVerified = &falseValue
+	} else {
+		updateInfo.Email = &emptyString
+		updateInfo.EmailVerified = &falseValue
+	}
+
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "unbind account failed: %v", err)
+		return ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "account unbound successfully, userID: %s, accountType: %s", currentUser.UserID, req.AccountType)
+	return nil
+}
+
 // generateVerificationCode 生成6位随机验证码
 func generateVerificationCode() string {
 	n, err := rand.Int(rand.Reader, big.NewInt(1000000))
@@ -411,4 +669,238 @@ func generateVerificationCode() string {
 		panic(fmt.Sprintf("failed to generate cryptographically secure random number for verification code: %v", err))
 	}
 	return fmt.Sprintf("%06d", n.Int64())
+}
+
+// UpdateAvatar 更新用户头像
+func (u *UserServiceImpl) UpdateAvatar(ctx context.Context, userID, avatarURL string) error {
+	// 参数校验
+	if userID == "" || avatarURL == "" {
+		zlog.CtxErrorf(ctx, "invalid params for update avatar: userID or avatarURL is empty")
+		return ErrInvalidParams
+	}
+
+	// URL验证
+	if err := validateAvatarURL(ctx, avatarURL); err != nil {
+		zlog.CtxErrorf(ctx, "avatar URL validation failed: %v", err)
+		// 包装错误以保留详细验证信息，同时仍可用 errors.Is 检查错误类型
+		return fmt.Errorf("%w: %v", ErrInvalidParams, err) // 保留详细错误
+	}
+
+	// 检查用户是否存在（GetUserByID 包含状态检查）
+	_, err := u.GetUserByID(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// 更新头像
+	updateInfo := &repo.UserUpdateInfo{
+		UserID: userID,
+		Avatar: &avatarURL,
+	}
+	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
+		zlog.CtxErrorf(ctx, "update avatar failed: %v", err)
+		return ErrInternalError
+	}
+
+	zlog.CtxInfof(ctx, "update avatar successfully for user: %s", userID)
+	return nil
+}
+
+// validateAvatarURL URL验证函数
+// 注意：移除了路径格式强制检查（原 /user/{userID}/avatar/），允许使用外部服务
+// 如果需要对自有存储路径进行限制，应该在存储访问层（COS IAM策略）实现
+func validateAvatarURL(ctx context.Context, avatarURL string) error {
+	// 1. URL长度限制（防止过长的URL）
+	const maxURLLength = 2048 // RFC 7230 建议的最大URL长度
+	if len(avatarURL) > maxURLLength {
+		return fmt.Errorf("avatar URL too long: exceeds %d characters", maxURLLength)
+	}
+
+	// 2. 使用标准库解析URL
+	parsedURL, err := url.Parse(avatarURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// 3. 验证协议（只允许http和https）
+	scheme := strings.ToLower(parsedURL.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return fmt.Errorf("invalid URL scheme: only http and https are allowed, got %s", scheme)
+	}
+
+	// 4. 验证Host不为空
+	if parsedURL.Host == "" {
+		return fmt.Errorf("invalid URL: host is required")
+	}
+
+	// 5. 验证Host格式（不能包含危险字符）
+	// 注意：移除了对 ".." 的检查，因为主机名中的 ".." 不是安全问题（路径遍历发生在路径部分）
+	// 虽然 url.Parse 通常会处理 "//"，但保留检查以防格式错误
+	if strings.Contains(parsedURL.Host, "//") {
+		return fmt.Errorf("invalid URL: host contains invalid characters")
+	}
+
+	// 6. SSRF 防护：禁止访问内网/私有IP地址
+	// 使用 Hostname() 方法提取主机名，自动处理端口和 IPv6 方括号
+	host := parsedURL.Hostname()
+
+	// 解析 IP 地址
+	ip := net.ParseIP(host)
+	if ip != nil {
+		// 如果是 IP 地址，检查是否为私有/保留地址
+		if isPrivateIP(ip) {
+			return fmt.Errorf("invalid URL: private/internal IP addresses are not allowed for security reasons")
+		}
+	} else {
+		// 如果是域名，解析为 IP 并检查
+		ips, err := net.LookupIP(host)
+		if err != nil {
+			// 域名解析失败，拒绝URL（可能是恶意域名或网络问题）
+			zlog.CtxErrorf(ctx, "failed to resolve host %s: %v", host, err)
+			return fmt.Errorf("invalid URL: failed to resolve host %s", host)
+		}
+
+		// 检查所有解析出的 IP 地址
+		if len(ips) == 0 {
+			return fmt.Errorf("invalid URL: host %s resolves to no IP addresses", host)
+		}
+
+		for _, resolvedIP := range ips {
+			if isPrivateIP(resolvedIP) {
+				return fmt.Errorf("invalid URL: host %s resolves to private/internal IP address", host)
+			}
+		}
+	}
+
+	// 7. 验证路径中不能包含危险字符（防止路径遍历攻击）
+	if strings.Contains(parsedURL.Path, "..") || strings.Contains(parsedURL.Path, "//") {
+		return fmt.Errorf("invalid URL path: contains dangerous characters")
+	}
+
+	// 8. 允许查询参数（外部服务如 Gravatar、CDN 需要查询参数）
+	// 但禁止锚点（Fragment），因为锚点不会发送到服务器
+	if parsedURL.Fragment != "" {
+		return fmt.Errorf("invalid URL: fragment is not allowed")
+	}
+
+	// 9. 验证URL路径或查询参数中是否包含图片格式标识
+	// 支持多种常见格式：
+	// - 直接路径：https://example.com/avatar.jpg
+	// - 查询参数：https://gravatar.com/avatar/xxx?s=200&d=identicon
+	// - 路径+查询：https://cdn.example.com/user123.jpg?width=200
+
+	// 从路径中提取可能的文件名
+	pathParts := strings.Split(strings.Trim(parsedURL.Path, "/"), "/")
+	var fileName string
+	if len(pathParts) > 0 {
+		fileName = pathParts[len(pathParts)-1]
+	}
+
+	// 检查路径中的文件扩展名
+	hasValidExtension := false
+	allowedExtensions := []string{".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg"}
+	// 允许的图片格式（不带点，用于查询参数）- 从allowedExtensions自动生成，避免重复维护
+	validImageFormats := make([]string, len(allowedExtensions))
+	for i, ext := range allowedExtensions {
+		validImageFormats[i] = strings.TrimPrefix(ext, ".")
+	}
+
+	if fileName != "" {
+		// 使用 path.Ext 提取真正的文件扩展名，避免被恶意文件名绕过（如 avatar.jpg.exe）
+		fileExt := strings.ToLower(path.Ext(fileName))
+		for _, ext := range allowedExtensions {
+			if fileExt == ext {
+				hasValidExtension = true
+				break
+			}
+		}
+	}
+
+	// 如果路径中没有有效的扩展名，检查查询参数中是否有图片相关的标识
+	// 例如：?format=png, ?type=image 等（某些服务使用查询参数指定格式）
+	if !hasValidExtension && parsedURL.RawQuery != "" {
+		// 解析查询参数，避免误判（如 ?some_other_param=format=png 不应该被识别）
+		// url.Values.Get() 只返回指定键的值，不会因为参数值中包含字符串而误判
+		query := parsedURL.Query()
+
+		// 检查 format 参数（如 ?format=png）
+		if format := strings.ToLower(query.Get("format")); format != "" {
+			for _, validFormat := range validImageFormats {
+				if format == validFormat {
+					hasValidExtension = true
+					break
+				}
+			}
+		}
+
+		// 检查 type 参数（如 ?type=image）
+		if !hasValidExtension && strings.ToLower(query.Get("type")) == "image" {
+			hasValidExtension = true
+		}
+
+		// 检查 mime 参数（如 ?mime=image/png）
+		if !hasValidExtension && strings.Contains(strings.ToLower(query.Get("mime")), "image") {
+			hasValidExtension = true
+		}
+
+		// 检查 ext 参数（如 ?ext=png）
+		if !hasValidExtension {
+			if ext := strings.ToLower(query.Get("ext")); ext != "" {
+				for _, validExt := range validImageFormats {
+					if ext == validExt {
+						hasValidExtension = true
+						break
+					}
+				}
+			}
+		}
+	}
+
+	// 如果既没有路径扩展名，也没有查询参数标识，允许通过但记录警告
+	// 因为某些服务可能通过 Content-Type 响应头来标识图片，而不是URL
+	if !hasValidExtension {
+		zlog.CtxWarnf(ctx, "avatar URL does not contain explicit image format identifier: %s", avatarURL)
+		// 不返回错误，允许通过，因为某些合法的图片URL可能没有扩展名
+	}
+
+	// 10. 如果路径中有文件名，验证文件名格式
+	if fileName != "" {
+		// 验证文件名长度（防止过长的文件名）
+		const maxFileNameLength = 255
+		if len(fileName) > maxFileNameLength {
+			return fmt.Errorf("invalid filename: too long, exceeds %d characters", maxFileNameLength)
+		}
+
+		// 验证文件名不能包含明显的危险字符
+		// 注意：这里不禁止 : 和 ?，因为它们可能在合法的URL中出现
+		dangerousChars := []string{"<", ">", "|", "\"", "*", "\\", "\x00"}
+		for _, char := range dangerousChars {
+			if strings.Contains(fileName, char) {
+				return fmt.Errorf("invalid filename: contains dangerous character '%s'", char)
+			}
+		}
+	}
+
+	return nil
+}
+
+// isPrivateIP 检查 IP 地址是否为私有/保留地址（用于 SSRF 防护）
+func isPrivateIP(ip net.IP) bool {
+	if ip == nil {
+		return false
+	}
+
+	// 使用标准库函数检查常见的私有/保留地址范围（同时支持 IPv4 和 IPv6）
+	if ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsPrivate() || ip.IsMulticast() {
+		return true
+	}
+
+	// 标准库的 IsUnspecified() 只检查单个地址（0.0.0.0 或 ::），但对于 SSRF 防护，
+	// 我们应该拒绝整个 0.0.0.0/8 范围（0.0.0.0 到 0.255.255.255）
+	if ip4 := ip.To4(); ip4 != nil {
+		return ip4[0] == 0
+	}
+
+	// 对于 IPv6，IsUnspecified() 已足够检查未指定地址（::）
+	return ip.IsUnspecified()
 }

@@ -39,8 +39,13 @@ var (
 	USER_ACCOUNT_NOT_EXIST     = MsgCode{Code: 2003, Msg: "账号不存在"}
 	USER_CREDENTIALS_ERROR     = MsgCode{Code: 2004, Msg: "密码错误"}
 	USER_ACCOUNT_ALREADY_EXIST = MsgCode{Code: 2008, Msg: "账号已存在"}
-	CAPTCHA_ERROR              = MsgCode{Code: 2100, Msg: "验证码错误"}
-	INSUFFICENT_PERMISSIONS    = MsgCode{Code: 2200, Msg: "权限不足"}
+	ACCOUNT_ALREADY_IN_USE     = MsgCode{Code: 2009, Msg: "该账号已被使用"}
+	// EMAIL_ALREADY_IN_USE 已废弃，请使用 ACCOUNT_ALREADY_IN_USE（保持向后兼容）
+	EMAIL_ALREADY_IN_USE    = ACCOUNT_ALREADY_IN_USE
+	PASSWORD_REQUIRED       = MsgCode{Code: 2010, Msg: "密码必填"}
+	ACCOUNT_LAST_CONTACT    = MsgCode{Code: 2011, Msg: "无法解绑唯一联系方式"}
+	CAPTCHA_ERROR           = MsgCode{Code: 2100, Msg: "验证码错误"}
+	INSUFFICENT_PERMISSIONS = MsgCode{Code: 2200, Msg: "权限不足"}
 
 	/* 思维导图错误 3000 ~ 3999 */
 	MINDMAP_NOT_FOUND         = MsgCode{Code: 3001, Msg: "思维导图不存在"}

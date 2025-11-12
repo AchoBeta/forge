@@ -21,7 +21,7 @@ func CastCreateMindMapReq2Params(req *def.CreateMindMapReq) *types.CreateMindMap
 		Title:  req.Title,
 		Desc:   req.Desc,
 		Layout: req.Layout,
-		Data:   CastMindMapDataDTO2DO(req.Data),
+		Data:   CastMindMapDataDTO2DO(req.Root),
 	}
 }
 
@@ -37,9 +37,9 @@ func CastUpdateMindMapReq2Params(req *def.UpdateMindMapReq) *types.UpdateMindMap
 		Layout: req.Layout,
 	}
 
-	// 处理Data字段的转换
-	if req.Data != nil {
-		data := CastMindMapDataDTO2DO(*req.Data)
+	// 处理Root字段的转换
+	if req.Root != nil {
+		data := CastMindMapDataDTO2DO(*req.Root)
 		params.Data = &data
 	}
 
@@ -68,10 +68,11 @@ func CastMindMapDO2DTO(mindmap *entity.MindMap) *def.MindMapDTO {
 	}
 	return &def.MindMapDTO{
 		MapID:     mindmap.MapID,
+		UserID:    mindmap.UserID,
 		Title:     mindmap.Title,
 		Desc:      mindmap.Desc,
 		Layout:    mindmap.Layout,
-		Data:      CastMindMapDataDO2DTO(mindmap.Data),
+		Root:      CastMindMapDataDO2DTO(mindmap.Data),
 		CreatedAt: formatTime(mindmap.CreatedAt),
 		UpdatedAt: formatTime(mindmap.UpdatedAt),
 	}

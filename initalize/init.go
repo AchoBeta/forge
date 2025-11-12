@@ -13,7 +13,7 @@ import (
 	"forge/infra/coze"
 	"forge/infra/database"
 	"forge/infra/eino"
-	"forge/infra/email"
+	"forge/infra/notification"
 	"forge/infra/storage"
 	"forge/interface/handler"
 	"forge/interface/router"
@@ -35,7 +35,7 @@ func Init() {
 	// TODO: cozeloop配置好后启用
 	// loop.MustInitLoop()
 	coze.InitCozeService()
-	email.InitEmailService(configs.Config().GetSMTPConfig())
+	notification.InitCodeService(configs.Config().GetSMTPConfig(), configs.Config().GetSMSConfig())
 
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
@@ -52,7 +52,7 @@ func Init() {
 	jwtConfig := configs.Config().GetJWTConfig()
 	jwtUtil := util.NewJWTUtil(jwtConfig.SecretKey, jwtConfig.ExpireHours)
 
-	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, email.GetEmailService())
+	us := userservice.NewUserServiceImpl(storage.GetUserPersistence(), coze.GetCozeService(), jwtUtil, notification.GetCodeService())
 
 	// 依赖注入：创建COS服务实例
 	cosConfig := configs.Config().GetCOSConfig()
