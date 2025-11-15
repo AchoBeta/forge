@@ -3,6 +3,8 @@ package types
 import (
 	"context"
 	"forge/biz/entity"
+
+	"github.com/markbates/goth"
 )
 
 type IUserService interface {
@@ -32,6 +34,9 @@ type IUserService interface {
 
 	// UpdateAvatar 更新用户头像
 	UpdateAvatar(ctx context.Context, userID, avatarURL string) error
+
+	// OAuthLogin 第三方登录（GitHub/微信等）
+	OAuthLogin(ctx context.Context, provider string, gothUser *goth.User) (*entity.User, string, error)
 }
 
 // 注册参数
@@ -62,13 +67,15 @@ type UpdateAccountParams struct {
 
 // 解绑联系方式参数
 type UnbindAccountParams struct {
-	Account     string // 需要解绑的手机号/邮箱
-	AccountType string // 手机号/邮箱
+	Account     string // 需要解绑的手机号/邮箱（解绑第三方账号时可为空）
+	AccountType string // 账号类型：phone（手机号）、email（邮箱）、github（GitHub）、wechat（微信）
 }
 
 const (
-	AccountTypePhone = "phone"
-	AccountTypeEmail = "email"
+	AccountTypePhone  = "phone"
+	AccountTypeEmail  = "email"
+	AccountTypeGithub = "github"
+	AccountTypeWechat = "wechat"
 )
 
 // 验证码使用场景

@@ -20,6 +20,8 @@ import (
 	"forge/infra/cache"
 	"forge/pkg/log/zlog"
 	"forge/util"
+
+	"github.com/markbates/goth"
 )
 
 var (
@@ -584,15 +586,15 @@ func (u *UserServiceImpl) UpdateAccount(ctx context.Context, req *types.UpdateAc
 	return req.Account, nil
 }
 
-// UnbindAccount 解绑联系方式（手机号/邮箱）
+// UnbindAccount 解绑联系方式（手机号/邮箱/第三方账号）
 func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAccountParams) error {
 	// 参数校验
 	if req == nil {
 		zlog.CtxErrorf(ctx, "unbind account request is nil")
 		return ErrInvalidParams
 	}
-	if req.Account == "" || req.AccountType == "" {
-		zlog.CtxErrorf(ctx, "invalid params for unbind account: missing required fields")
+	if req.AccountType == "" {
+		zlog.CtxErrorf(ctx, "invalid params for unbind account: account_type is required")
 		return ErrInvalidParams
 	}
 
@@ -603,6 +605,13 @@ func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAc
 		return ErrPermissionDenied
 	}
 
+	// 使用 var 定义变量来减少重复逻辑
+	var (
+		currentBoundValue string // 当前绑定的值（手机号/邮箱/第三方ID）
+		accountLabel      string // 账号标签（用于日志）
+		needAccountParam  bool   // 是否需要 account 参数（手机号和邮箱需要，第三方不需要）
+	)
+
 	// 准备更新信息
 	updateInfo := &repo.UserUpdateInfo{
 		UserID: currentUser.UserID,
@@ -610,47 +619,62 @@ func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAc
 	falseValue := false
 	emptyString := ""
 
-	var (
-		currentContact string
-		otherContact   string
-		accountLabel   string
-	)
-
+	// 根据账号类型设置变量和更新字段（合并到一个 switch 中）
 	switch req.AccountType {
 	case types.AccountTypePhone:
-		currentContact = currentUser.Phone
-		otherContact = currentUser.Email
+		currentBoundValue = currentUser.Phone
 		accountLabel = "phone"
+		needAccountParam = true
+		updateInfo.Phone = &emptyString
+		updateInfo.PhoneVerified = &falseValue
 	case types.AccountTypeEmail:
-		currentContact = currentUser.Email
-		otherContact = currentUser.Phone
+		currentBoundValue = currentUser.Email
 		accountLabel = "email"
+		needAccountParam = true
+		updateInfo.Email = &emptyString
+		updateInfo.EmailVerified = &falseValue
+	case types.AccountTypeGithub:
+		currentBoundValue = currentUser.GithubID
+		accountLabel = "github"
+		needAccountParam = false
+		updateInfo.GithubID = &emptyString
+		updateInfo.GithubLogin = &emptyString
+	case types.AccountTypeWechat:
+		currentBoundValue = currentUser.WechatOpenID
+		accountLabel = "wechat"
+		needAccountParam = false
+		updateInfo.WechatOpenID = &emptyString
+		updateInfo.WechatUnionID = &emptyString
 	default:
 		zlog.CtxErrorf(ctx, "unsupported account type for unbind: %s", req.AccountType)
 		return ErrUnsupportedAccountType
 	}
 
-	if currentContact == "" {
+	// 统一参数校验：需要 account 参数的类型
+	if needAccountParam {
+		if req.Account == "" {
+			zlog.CtxErrorf(ctx, "account is required for unbind %s", accountLabel)
+			return ErrInvalidParams
+		}
+		if req.Account != currentBoundValue {
+			zlog.CtxErrorf(ctx, "%s mismatch for unbind, userID: %s, request %s: %s", accountLabel, currentUser.UserID, accountLabel, req.Account)
+			return ErrInvalidParams
+		}
+	}
+
+	// 统一检查：是否已绑定
+	if currentBoundValue == "" {
 		zlog.CtxErrorf(ctx, "%s is not bound, userID: %s", accountLabel, currentUser.UserID)
 		return ErrInvalidParams
 	}
-	if req.Account != currentContact {
-		zlog.CtxErrorf(ctx, "%s mismatch for unbind, userID: %s, request %s: %s", accountLabel, currentUser.UserID, accountLabel, req.Account)
-		return ErrInvalidParams
-	}
-	if otherContact == "" {
-		zlog.CtxErrorf(ctx, "cannot unbind %s, no other contact bound, userID: %s", accountLabel, currentUser.UserID)
+
+	// 统一检查：是否还有其他登录方式
+	if !u.hasOtherLoginMethod(currentUser, req.AccountType) {
+		zlog.CtxErrorf(ctx, "cannot unbind %s, no other login method available, userID: %s", accountLabel, currentUser.UserID)
 		return ErrCannotUnbindOnlyContact
 	}
 
-	if req.AccountType == types.AccountTypePhone {
-		updateInfo.Phone = &emptyString
-		updateInfo.PhoneVerified = &falseValue
-	} else {
-		updateInfo.Email = &emptyString
-		updateInfo.EmailVerified = &falseValue
-	}
-
+	// 执行更新
 	if err := u.userRepo.UpdateUser(ctx, updateInfo); err != nil {
 		zlog.CtxErrorf(ctx, "unbind account failed: %v", err)
 		return ErrInternalError
@@ -658,6 +682,16 @@ func (u *UserServiceImpl) UnbindAccount(ctx context.Context, req *types.UnbindAc
 
 	zlog.CtxInfof(ctx, "account unbound successfully, userID: %s, accountType: %s", currentUser.UserID, req.AccountType)
 	return nil
+}
+
+// hasOtherLoginMethod 检查用户是否还有其他登录方式（排除指定的账号类型）
+func (u *UserServiceImpl) hasOtherLoginMethod(user *entity.User, excludeAccountType string) bool {
+	// 直接检查所有登录方式，排除当前要解绑的账号类型
+	return (user.Phone != "" && excludeAccountType != types.AccountTypePhone) ||
+		(user.Email != "" && excludeAccountType != types.AccountTypeEmail) ||
+		user.Password != "" ||
+		(user.GithubID != "" && excludeAccountType != types.AccountTypeGithub) ||
+		(user.WechatOpenID != "" && excludeAccountType != types.AccountTypeWechat)
 }
 
 // generateVerificationCode 生成6位随机验证码
@@ -903,4 +937,192 @@ func isPrivateIP(ip net.IP) bool {
 
 	// 对于 IPv6，IsUnspecified() 已足够检查未指定地址（::）
 	return ip.IsUnspecified()
+}
+
+// OAuthLogin 第三方登录（GitHub/微信等）
+func (u *UserServiceImpl) OAuthLogin(ctx context.Context, provider string, gothUser *goth.User) (*entity.User, string, error) {
+	// 参数校验
+	if provider == "" || gothUser == nil {
+		zlog.CtxErrorf(ctx, "invalid params for oauth login: provider or gothUser is empty")
+		return nil, "", ErrInvalidParams
+	}
+
+	if gothUser.UserID == "" {
+		zlog.CtxErrorf(ctx, "gothUser.UserID is empty")
+		return nil, "", ErrInvalidParams
+	}
+
+	var user *entity.User
+	var err error
+
+	// 根据 provider 类型查询用户
+	switch provider {
+	case "github":
+		// 根据 GithubID 查询
+		query := repo.NewUserQueryByGithubID(gothUser.UserID)
+		user, err = u.userRepo.GetUser(ctx, query)
+	case "wechat":
+		// 根据 WechatOpenID 查询
+		query := repo.NewUserQueryByWechatOpenID(gothUser.UserID)
+		user, err = u.userRepo.GetUser(ctx, query)
+	default:
+		zlog.CtxErrorf(ctx, "unsupported oauth provider: %s", provider)
+		return nil, "", ErrUnsupportedAccountType
+	}
+
+	// GetUser 返回错误表示数据库查询错误
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to query user by %s: %v", provider, err)
+		return nil, "", ErrInternalError
+	}
+	// user == nil 表示用户不存在，需要创建新用户
+
+	// 用户不存在，创建新用户
+	if user == nil {
+		userID, err := util.GenerateStringID()
+		if err != nil {
+			zlog.CtxErrorf(ctx, "generate user id failed: %v", err)
+			return nil, "", ErrInternalError
+		}
+
+		// 确定用户名：优先使用 Name，如果为空则使用 NickName，如果还是为空则使用默认值
+		userName := gothUser.Name
+		if userName == "" {
+			userName = gothUser.NickName
+		}
+		if userName == "" {
+			// 如果 Name 和 NickName 都为空，使用 provider 和 UserID 生成默认用户名
+			// 安全地截取 UserID（最多取前8个字符，如果长度不足则使用全部）
+			userIDPrefix := gothUser.UserID
+			if len(userIDPrefix) > 8 {
+				userIDPrefix = userIDPrefix[:8]
+			}
+			userName = fmt.Sprintf("%s_user_%s", provider, userIDPrefix)
+			zlog.CtxWarnf(ctx, "gothUser.Name and NickName are both empty, using default username: %s", userName)
+		}
+
+		user = &entity.User{
+			UserID:   userID,
+			UserName: userName,
+			Avatar:   gothUser.AvatarURL,
+			Status:   entity.UserStatusActive,
+		}
+
+		// 根据 provider 设置对应字段
+		switch provider {
+		case "github":
+			user.GithubID = gothUser.UserID
+			// GitHub 的 NickName 是 login（用户名），Name 是显示名称
+			if gothUser.NickName != "" {
+				user.GithubLogin = gothUser.NickName
+			} else if gothUser.Name != "" {
+				user.GithubLogin = gothUser.Name
+			} else {
+				// 如果都没有，使用 UserID 的一部分作为 login
+				user.GithubLogin = gothUser.UserID
+			}
+			// GitHub 用户可能有邮箱
+			if gothUser.Email != "" {
+				user.Email = gothUser.Email
+				user.EmailVerified = true
+			}
+		case "wechat":
+			user.WechatOpenID = gothUser.UserID
+			// 如果有 unionid，也存储
+			if unionid, ok := gothUser.RawData["unionid"].(string); ok && unionid != "" {
+				user.WechatUnionID = unionid
+			}
+		}
+
+		// 创建用户
+		if err := u.userRepo.CreateUser(ctx, user); err != nil {
+			zlog.CtxErrorf(ctx, "create user failed: %v", err)
+			return nil, "", ErrInternalError
+		}
+
+		zlog.CtxInfof(ctx, "oauth user created: userID=%s, provider=%s", userID, provider)
+	} else {
+		// 用户已存在，更新最后登录时间和相关信息
+		now := time.Now()
+
+		// 关键更新：最后登录时间和第三方ID（这些是登录流程的核心数据）
+		criticalUpdateInfo := &repo.UserUpdateInfo{
+			UserID:      user.UserID,
+			LastLoginAt: &now,
+		}
+
+		// 更新第三方账号ID（如果变化）- 这是关键信息
+		switch provider {
+		case "github":
+			if gothUser.UserID != user.GithubID {
+				criticalUpdateInfo.GithubID = &gothUser.UserID
+			}
+		case "wechat":
+			if gothUser.UserID != user.WechatOpenID {
+				criticalUpdateInfo.WechatOpenID = &gothUser.UserID
+			}
+			// unionid 也是关键信息，用于跨应用识别
+			if unionid, ok := gothUser.RawData["unionid"].(string); ok && unionid != "" && unionid != user.WechatUnionID {
+				criticalUpdateInfo.WechatUnionID = &unionid
+			}
+		}
+
+		// 先更新关键信息，如果失败则返回错误
+		if err := u.userRepo.UpdateUser(ctx, criticalUpdateInfo); err != nil {
+			zlog.CtxErrorf(ctx, "update critical user info failed (lastLoginAt/thirdPartyID): %v", err)
+			return nil, "", ErrInternalError
+		}
+
+		// 非关键更新：头像、用户名、邮箱等（这些失败不影响登录）
+		nonCriticalUpdateInfo := &repo.UserUpdateInfo{
+			UserID: user.UserID,
+		}
+
+		// 更新头像（如果第三方头像更新了）
+		if gothUser.AvatarURL != "" && gothUser.AvatarURL != user.Avatar {
+			nonCriticalUpdateInfo.Avatar = &gothUser.AvatarURL
+		}
+
+		// 更新第三方账号的非关键信息（如果变化）
+		switch provider {
+		case "github":
+			githubLogin := gothUser.NickName
+			if githubLogin == "" {
+				githubLogin = gothUser.Name
+			}
+			if githubLogin != "" && githubLogin != user.GithubLogin {
+				nonCriticalUpdateInfo.GithubLogin = &githubLogin
+			}
+			// 如果 GitHub 用户有邮箱且用户当前没有邮箱，更新邮箱
+			if gothUser.Email != "" && user.Email == "" {
+				nonCriticalUpdateInfo.Email = &gothUser.Email
+				emailVerified := true
+				nonCriticalUpdateInfo.EmailVerified = &emailVerified
+			}
+		}
+
+		// 检查是否有非关键信息需要更新
+		hasNonCriticalUpdate := nonCriticalUpdateInfo.Avatar != nil ||
+			nonCriticalUpdateInfo.GithubLogin != nil ||
+			nonCriticalUpdateInfo.Email != nil
+
+		// 更新非关键信息，失败时只记录警告，不影响登录
+		if hasNonCriticalUpdate {
+			if err := u.userRepo.UpdateUser(ctx, nonCriticalUpdateInfo); err != nil {
+				zlog.CtxWarnf(ctx, "update non-critical user info failed (avatar/username/email): %v", err)
+				// 不返回错误，继续登录流程
+			}
+		}
+
+		zlog.CtxInfof(ctx, "oauth user login: userID=%s, provider=%s", user.UserID, provider)
+	}
+
+	// 生成 JWT token
+	token, err := u.jwtUtil.GenerateToken(user.UserID)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "generate token failed: %v", err)
+		return nil, "", ErrInternalError
+	}
+
+	return user, token, nil
 }
