@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"forge/biz/entity"
 	"forge/infra/storage/po"
+
 	"gorm.io/datatypes"
 )
 
@@ -27,6 +28,10 @@ func CastUserDO2PO(user *entity.User) *po.UserPO {
 		Status:        user.Status,
 		PhoneVerified: user.PhoneVerified,
 		EmailVerified: user.EmailVerified,
+		GithubID:      user.GithubID,
+		GithubLogin:   user.GithubLogin,
+		WechatOpenID:  user.WechatOpenID,
+		WechatUnionID: user.WechatUnionID,
 		LastLoginAt:   user.LastLoginAt,
 	}
 }
@@ -46,6 +51,10 @@ func CastUserPO2DO(userPO *po.UserPO) *entity.User {
 		Status:        userPO.Status,
 		PhoneVerified: userPO.PhoneVerified,
 		EmailVerified: userPO.EmailVerified,
+		GithubID:      userPO.GithubID,
+		GithubLogin:   userPO.GithubLogin,
+		WechatOpenID:  userPO.WechatOpenID,
+		WechatUnionID: userPO.WechatUnionID,
 		LastLoginAt:   userPO.LastLoginAt,
 	}
 

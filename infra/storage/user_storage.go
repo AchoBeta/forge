@@ -87,6 +87,20 @@ func (u *userPersistence) UpdateUser(ctx context.Context, updateInfo *repo.UserU
 		updates["email_verified"] = *updateInfo.EmailVerified
 	}
 
+	// 第三方登录
+	if updateInfo.GithubID != nil {
+		updates["github_id"] = *updateInfo.GithubID
+	}
+	if updateInfo.GithubLogin != nil {
+		updates["github_login"] = *updateInfo.GithubLogin
+	}
+	if updateInfo.WechatOpenID != nil {
+		updates["wechat_open_id"] = *updateInfo.WechatOpenID
+	}
+	if updateInfo.WechatUnionID != nil {
+		updates["wechat_union_id"] = *updateInfo.WechatUnionID
+	}
+
 	// 时间信息
 	if updateInfo.LastLoginAt != nil {
 		updates["last_login_at"] = *updateInfo.LastLoginAt
@@ -128,6 +142,14 @@ func (u *userPersistence) GetUser(ctx context.Context, query repo.UserQuery) (*e
 	}
 	if query.Email != "" {
 		db = db.Where("email = ?", query.Email)
+		hasCond = true
+	}
+	if query.GithubID != "" {
+		db = db.Where("github_id = ?", query.GithubID)
+		hasCond = true
+	}
+	if query.WechatOpenID != "" {
+		db = db.Where("wechat_open_id = ?", query.WechatOpenID)
 		hasCond = true
 	}
 

@@ -41,33 +41,45 @@ type IHandler interface {
 	GetConversation(ctx context.Context, req *def.GetConversationRequest) (*def.GetConversationResponse, error)
 	UpdateConversationTitle(ctx context.Context, req *def.UpdateConversationTitleRequest) (*def.UpdateConversationTitleResponse, error)
 	GenerateMindMap(ctx context.Context, req *def.GenerateMindMapRequest) (*def.GenerateMindMapResponse, error)
+
+	// Generation: 批量生成相关接口
+	GenerateMindMapPro(ctx context.Context, req *def.GenerateMindMapProReq) (rsp *def.GenerateMindMapProResp, err error)
+	GetGenerationBatch(ctx context.Context, batchID string) (rsp *def.GetGenerationBatchResp, err error)
+	LabelGenerationResult(ctx context.Context, resultID string, req *def.LabelGenerationResultReq) (rsp *def.LabelGenerationResultResp, err error)
+	ListUserGenerationBatches(ctx context.Context, req *def.ListUserGenerationBatchesReq) (rsp *def.ListUserGenerationBatchesResp, err error)
+	ExportSFTData(ctx context.Context, req *def.ExportSFTDataReq) (rsp *def.ExportSFTDataResp, err error)
+	ExportSFTDataToFile(ctx context.Context, req *def.ExportSFTDataReq) (rsp *def.ExportSFTDataToFileResp, err error)
+	ExportDPOData(ctx context.Context, req *def.ExportSFTDataReq) (string, error)
+	GetSFTJSONLData(ctx context.Context, req *def.ExportSFTDataReq) (string, error)
 }
 
 var handler IHandler
 
 type Handler struct {
-	UserService    types.IUserService
-	MindMapService types.IMindMapService
-	COSService     types.ICOSService
-	AiChatService  types.IAiChatService
+	UserService       types.IUserService
+	MindMapService    types.IMindMapService
+	COSService        types.ICOSService
+	AiChatService     types.IAiChatService
+	GenerationService types.IGenerationService
 }
 
 func GetHandler() IHandler {
 	return handler
 }
-func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService) {
-	err := InitHandler(userService, mindMapService, cosService, aiChatService)
+func MustInitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService, generationService types.IGenerationService) {
+	err := InitHandler(userService, mindMapService, cosService, aiChatService, generationService)
 	if err != nil {
 		panic(err)
 	}
 }
 
-func InitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService) error {
+func InitHandler(userService types.IUserService, mindMapService types.IMindMapService, cosService types.ICOSService, aiChatService types.IAiChatService, generationService types.IGenerationService) error {
 	handler = &Handler{
-		UserService:    userService,
-		MindMapService: mindMapService,
-		COSService:     cosService,
-		AiChatService:  aiChatService,
+		UserService:       userService,
+		MindMapService:    mindMapService,
+		COSService:        cosService,
+		AiChatService:     aiChatService,
+		GenerationService: generationService,
 	}
 	return nil
 }

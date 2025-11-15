@@ -12,77 +12,125 @@ import (
 	"io"
 	"mime/multipart"
 	"net/http"
+	"path/filepath"
 	"strings"
 )
 
-// 定义MIME类型常量（硬编码常量，避免魔法字符串）
+// 定义MIME类型常量
 const (
 	mimeTypePDF  = "application/pdf"
 	mimeTypeDoc  = "application/msword"
 	mimeTypeDocx = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
 	mimeTypePPT  = "application/vnd.ms-powerpoint"
 	mimeTypePPTx = "application/vnd.openxmlformats-officedocument.presentationml.presentation"
+	mimeTypeZip  = "application/zip" // .docx, .pptx 实际上是ZIP格式
 )
 
-// todo
-// 获取许可
-// license.SetMeteredKey
-// "github.com/unidoc/unioffice/v2/common/license"
-func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err error) {
-	mime, err := fileHeaderMime(fh)
-	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
-		zlog.CtxErrorf(ctx, "failed to detect MIME type for file %v", err)
-		return "", err
-	}
-
-	switch mime {
-	case mimeTypePDF:
-		// PDF 处理
-		text, err = extractPDF(fh)
-		if err != nil {
-			zlog.CtxErrorf(ctx, "Failed to extract pdf: %v", err)
-			return
-		}
-	case
-		mimeTypeDoc, mimeTypeDocx: // .doc,  .docx
-		// Word 处理
-		text, err = extractWord(fh)
-		if err != nil {
-			zlog.CtxErrorf(ctx, "Failed to extract word: %v", err)
-			return
-		}
-	case
-		mimeTypePPT, mimeTypePPTx: // .ppt, .pptx
-		// PPT 处理
-		text, err = extractPPT(fh)
-		if err != nil {
-			zlog.CtxErrorf(ctx, "Failed to extract PPT: %v", err)
-			return
-		}
-
-	default:
-		// 其他类型（或报错、或放行）
-		zlog.CtxErrorf(ctx, "Unsupported file type for parsing")
-		return "", fmt.Errorf(`unknown mime: "%s"`, mime)
-	}
-	return
-
+// 支持的文件扩展名
+var supportedExtensions = map[string]bool{
+	".pdf":  true,
+	".doc":  true,
+	".docx": true,
+	".ppt":  true,
+	".pptx": true,
 }
 
-// 返回形如 "image/jpeg"、"application/zip" 的 MIME 类型，出错时返回空串
-func fileHeaderMime(fh *multipart.FileHeader) (string, error) {
-	rc, err := fh.Open()
-	if err != nil {
-		return "", err
+func ParseFile(ctx context.Context, fh *multipart.FileHeader) (text string, err error) {
+	// 首先检查文件扩展名
+	ext := strings.ToLower(filepath.Ext(fh.Filename))
+	if !supportedExtensions[ext] {
+		return "", fmt.Errorf("unsupported file extension: %s", ext)
 	}
-	defer rc.Close()
 
-	// 只取文件头 512 字节即可
-	buf := make([]byte, 512)
-	n, err := io.ReadFull(rc, buf)
-	if n == 0 {
+	mime, err := fileHeaderMime(fh)
+	if err != nil && !errors.Is(err, io.ErrUnexpectedEOF) {
+		zlog.CtxErrorf(ctx, "failed to detect MIME type for file %s: %v", fh.Filename, err)
 		return "", err
 	}
+
+	// 根据MIME类型和文件扩展名确定文件类型
+	fileType, err := determineFileType(mime, ext)
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to determine file type for %s: %v", fh.Filename, err)
+		return "", err
+	}
+
+	switch fileType {
+	case mimeTypePDF:
+		text, err = extractPDF(fh)
+	case mimeTypeDoc, mimeTypeDocx:
+		text, err = extractWord(fh)
+	case mimeTypePPT, mimeTypePPTx:
+		text, err = extractPPT(fh)
+	default:
+		err = fmt.Errorf("unsupported file type: %s", fileType)
+	}
+
+	if err != nil {
+		zlog.CtxErrorf(ctx, "failed to extract content from %s: %v", fh.Filename, err)
+		return "", err
+	}
+
+	return text, nil
+}
+
+// 根据MIME类型和文件扩展名确定最终的文件类型
+func determineFileType(mime, ext string) (string, error) {
+	switch mime {
+	case mimeTypePDF:
+		return mimeTypePDF, nil
+	case mimeTypeDoc, mimeTypeDocx:
+		return mime, nil
+	case mimeTypePPT, mimeTypePPTx:
+		return mime, nil
+	case mimeTypeZip:
+		// .docx 和 .pptx 实际上是ZIP格式，需要根据扩展名进一步判断
+		switch ext {
+		case ".docx":
+			return mimeTypeDocx, nil
+		case ".pptx":
+			return mimeTypePPTx, nil
+		default:
+			return "", fmt.Errorf("unsupported ZIP-based file format: %s", ext)
+		}
+	default:
+		// 如果MIME类型检测失败，回退到扩展名判断
+		switch ext {
+		case ".pdf":
+			return mimeTypePDF, nil
+		case ".doc":
+			return mimeTypeDoc, nil
+		case ".docx":
+			return mimeTypeDocx, nil
+		case ".ppt":
+			return mimeTypePPT, nil
+		case ".pptx":
+			return mimeTypePPTx, nil
+		default:
+			return "", fmt.Errorf("unable to determine file type: MIME=%s, ext=%s", mime, ext)
+		}
+	}
+}
+
+// 返回检测到的MIME类型
+func fileHeaderMime(fh *multipart.FileHeader) (string, error) {
+	file, err := fh.Open()
+	if err != nil {
+		return "", fmt.Errorf("failed to open file: %w", err)
+	}
+	defer file.Close()
+
+	// 读取文件头进行MIME类型检测
+	buf := make([]byte, 512)
+	n, err := file.Read(buf)
+	if err != nil && !errors.Is(err, io.EOF) {
+		return "", fmt.Errorf("failed to read file header: %w", err)
+	}
+
+	if n == 0 {
+		return "", errors.New("file is empty")
+	}
+
 	return http.DetectContentType(buf[:n]), nil
 }
 

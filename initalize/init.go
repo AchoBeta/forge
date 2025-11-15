@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"forge/biz/aichatservice"
 	"forge/biz/cosservice"
+	"forge/biz/generationservice"
 	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
 	"forge/infra/cache"
@@ -14,10 +15,12 @@ import (
 	"forge/infra/database"
 	"forge/infra/eino"
 	"forge/infra/notification"
+	"forge/infra/oauth"
 	"forge/infra/storage"
 	"forge/interface/handler"
 	"forge/interface/router"
 	"forge/pkg/log"
+	"github.com/unidoc/unioffice/v2/common/license"
 
 	// "forge/pkg/loop"
 	"forge/util"
@@ -37,9 +40,14 @@ func Init() {
 	coze.InitCozeService()
 	notification.InitCodeService(configs.Config().GetSMTPConfig(), configs.Config().GetSMSConfig())
 
+	// 初始化 OAuth (goth)
+	oauthConfig := configs.Config().GetOAuthConfig()
+	oauth.InitGoth(oauthConfig)
+
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 	storage.InitAiChatStorage()
+	storage.InitGenerationStorage() // 初始化生成相关存储
 
 	// snowflake - 从配置文件读取节点ID
 	snowflakeConfig := configs.Config().GetSnowflakeConfig()
@@ -64,7 +72,16 @@ func Init() {
 	// 依赖注入: 创建ai服务实例
 	aiConfig := configs.Config().GetAiChatConfig()
 	acs := aichatservice.NewAiChatService(storage.GetAiChatPersistence(), eino.NewAiChatClient(aiConfig.ApiKey, aiConfig.ModelName))
-	handler.MustInitHandler(us, mms, cs, acs)
+
+	// 依赖注入: 创建generation服务实例
+	gs := generationservice.NewGenerationService(storage.GetGenerationPersistence(), storage.GetAiChatPersistence(), storage.GetMindMapPersistence())
+
+	handler.MustInitHandler(us, mms, cs, acs, gs)
+
+	//从配置文件中读取解析文件apikey
+	uniOfficeConfig := configs.Config().GetUniOfficeConfig()
+	license.SetMeteredKey(uniOfficeConfig.MeteredKey)
+	license.SetMeteredKey("uniapi") //文件解析初始化44
 
 	// 初始化JWT鉴权中间件
 	router.InitJWTAuth(us)

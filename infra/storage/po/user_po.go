@@ -21,6 +21,12 @@ type UserPO struct {
 	PhoneVerified bool `gorm:"column:phone_verified;default:false" json:"phone_verified"`
 	EmailVerified bool `gorm:"column:email_verified;default:false" json:"email_verified"`
 
+	// 第三方登录
+	GithubID      string `gorm:"column:github_id" json:"github_id"`
+	GithubLogin   string `gorm:"column:github_login" json:"github_login"`
+	WechatOpenID  string `gorm:"column:wechat_open_id" json:"wechat_open_id"`
+	WechatUnionID string `gorm:"column:wechat_union_id" json:"wechat_union_id"`
+
 	CreatedAt   *time.Time `gorm:"column:created_at" json:"create_at"`
 	UpdatedAt   *time.Time `gorm:"column:updated_at" json:"updated_at"`
 	IsDeleted   int8       `gorm:"column:is_deleted" json:"is_deleted"` // 已删除：1
