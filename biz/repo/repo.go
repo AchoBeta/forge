@@ -72,23 +72,21 @@ type UserUpdateInfo struct {
 	// 时间信息
 	LastLoginAt *time.Time // 最后登录时间
 
-	// 第三方登录（暂不开放，后续扩展）
-	/*
-	   WechatOpenID  *string
-	   WechatUnionID *string
-	   GithubID      *string
-	   GithubLogin   *string
-	*/
+	// 第三方登录
+	GithubID      *string // GitHub 用户 ID
+	GithubLogin   *string // GitHub 用户名
+	WechatOpenID  *string // 微信 openid
+	WechatUnionID *string // 微信 unionid
 }
 
 // UserQuery 用户查询条件
 type UserQuery struct {
-	UserID   string // 根据用户ID查询
-	UserName string // 根据用户名查询
-	Phone    string // 根据手机号查询
-	Email    string // 根据邮箱查询
-	// Platform string // 第三方平台
-	// ThirdID  string // 第三方ID
+	UserID       string // 根据用户ID查询
+	UserName     string // 根据用户名查询
+	Phone        string // 根据手机号查询
+	Email        string // 根据邮箱查询
+	GithubID     string // 根据 GitHub ID 查询
+	WechatOpenID string // 根据微信 openid 查询
 }
 
 // NewUserQueryByID 创建根据用户ID查询的条件
@@ -109,4 +107,14 @@ func NewUserQueryByPhone(phone string) UserQuery {
 // NewUserQueryByEmail 创建根据邮箱查询的条件
 func NewUserQueryByEmail(email string) UserQuery {
 	return UserQuery{Email: email}
+}
+
+// NewUserQueryByGithubID 创建根据 GitHub ID 查询的条件
+func NewUserQueryByGithubID(githubID string) UserQuery {
+	return UserQuery{GithubID: githubID}
+}
+
+// NewUserQueryByWechatOpenID 创建根据微信 openid 查询的条件
+func NewUserQueryByWechatOpenID(wechatOpenID string) UserQuery {
+	return UserQuery{WechatOpenID: wechatOpenID}
 }

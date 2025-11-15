@@ -363,3 +363,36 @@ func UpdateAvatar() gin.HandlerFunc {
 		r.Success(rsp)
 	}
 }
+
+// loadOAuthService 加载 OAuth 第三方登录路由
+func loadOAuthService(r *gin.RouterGroup) {
+	// 获取 UserService（从 handler 中获取）
+	h := handler.GetHandler()
+	// 使用类型断言获取 UserService
+	hHandler, ok := h.(*handler.Handler)
+	if !ok || hHandler == nil {
+		// 如果类型断言失败或 handler 为 nil，这是严重的服务初始化问题，应该直接 panic
+		zlog.Panicf("CRITICAL: Handler is not initialized or is not of type *handler.Handler")
+	}
+	if hHandler.UserService == nil {
+		// 如果 UserService 为 nil，这是严重的服务初始化问题，应该直接 panic
+		zlog.Panicf("CRITICAL: UserService is not initialized in handler")
+	}
+	userService := hHandler.UserService
+
+	// GitHub OAuth
+	// [GET] /api/biz/v1/auth/github
+	r.Handle(GET, "github", handler.OAuthBegin("github"))
+	// [GET] /api/biz/v1/auth/github/callback
+	r.Handle(GET, "github/callback", handler.OAuthCallback(userService, "github"))
+
+	// 微信 OAuth
+	// [GET] /api/biz/v1/auth/wechat
+	r.Handle(GET, "wechat", handler.OAuthBegin("wechat"))
+	// [GET] /api/biz/v1/auth/wechat/callback
+	r.Handle(GET, "wechat/callback", handler.OAuthCallback(userService, "wechat"))
+
+	// 获取可用的 OAuth 提供商列表
+	// [GET] /api/biz/v1/auth/providers
+	r.Handle(GET, "providers", handler.GetOAuthProviders())
+}

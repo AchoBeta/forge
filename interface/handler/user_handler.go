@@ -108,6 +108,10 @@ func (h *Handler) GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error)
 	// 判断是否有密码
 	hasPassword := user.Password != ""
 
+	// 判断是否绑定第三方账号
+	hasGithub := user.GithubID != ""
+	hasWechat := user.WechatOpenID != ""
+
 	// 组装响应
 	rsp = &def.GetHomeResp{
 		UserName:    user.UserName,
@@ -115,6 +119,10 @@ func (h *Handler) GetHome(ctx context.Context) (rsp *def.GetHomeResp, err error)
 		Phone:       user.Phone,
 		Email:       user.Email,
 		HasPassword: hasPassword,
+		// 第三方登录信息
+		HasGithub:   hasGithub,
+		GithubLogin: user.GithubLogin,
+		HasWechat:   hasWechat,
 	}
 	return rsp, nil
 }

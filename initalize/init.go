@@ -14,6 +14,7 @@ import (
 	"forge/infra/database"
 	"forge/infra/eino"
 	"forge/infra/notification"
+	"forge/infra/oauth"
 	"forge/infra/storage"
 	"forge/interface/handler"
 	"forge/interface/router"
@@ -37,6 +38,10 @@ func Init() {
 	// loop.MustInitLoop()
 	coze.InitCozeService()
 	notification.InitCodeService(configs.Config().GetSMTPConfig(), configs.Config().GetSMSConfig())
+
+	// 初始化 OAuth (goth)
+	oauthConfig := configs.Config().GetOAuthConfig()
+	oauth.InitGoth(oauthConfig)
 
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
