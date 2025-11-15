@@ -20,6 +20,7 @@ type IConfig interface {
 	GetCOSConfig() COSConfig
 	GetAiChatConfig() AiChatConfig
 	GetSMSConfig() SMSConfig
+	GetUniOfficeConfig() UniOfficeConfig
 	GetOAuthConfig() OAuthConfig // OAuth 第三方登录配置
 }
 
@@ -119,6 +120,8 @@ func mustInit(path string) *config {
 
 }
 
+func (c *config) GetUniOfficeConfig() UniOfficeConfig { return c.UniOfficeConfig }
+
 type config struct {
 	AppConfig       ApplicationConfig `mapstructure:"app"`
 	LogConfig       LoggerConfig      `mapstructure:"log"`
@@ -130,6 +133,7 @@ type config struct {
 	COSConfig       COSConfig         `mapstructure:"cos"`
 	AiChatConfig    AiChatConfig      `mapstructure:"ai_client"`
 	SMSConfig       SMSConfig         `mapstructure:"sms"`
+	UniOfficeConfig UniOfficeConfig   `mapstructure:"unioffice"`
 	OAuthConfig     OAuthConfig       `mapstructure:"oauth"`
 }
 
@@ -205,6 +209,9 @@ type SMSConfig struct {
 	Endpoint string `mapstructure:"endpoint"`
 }
 
+type UniOfficeConfig struct {
+	MeteredKey string `mapstructure:"metered_key"`
+}
 // OAuthConfig OAuth 第三方登录配置
 type OAuthConfig struct {
 	GitHubClientID     string `mapstructure:"github_client_id"`

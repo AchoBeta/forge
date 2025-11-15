@@ -19,6 +19,7 @@ import (
 	"forge/interface/handler"
 	"forge/interface/router"
 	"forge/pkg/log"
+	"github.com/unidoc/unioffice/v2/common/license"
 
 	// "forge/pkg/loop"
 	"forge/util"
@@ -70,6 +71,11 @@ func Init() {
 	aiConfig := configs.Config().GetAiChatConfig()
 	acs := aichatservice.NewAiChatService(storage.GetAiChatPersistence(), eino.NewAiChatClient(aiConfig.ApiKey, aiConfig.ModelName))
 	handler.MustInitHandler(us, mms, cs, acs)
+
+	//从配置文件中读取解析文件apikey
+	uniOfficeConfig := configs.Config().GetUniOfficeConfig()
+	license.SetMeteredKey(uniOfficeConfig.MeteredKey)
+	license.SetMeteredKey("uniapi") //文件解析初始化44
 
 	// 初始化JWT鉴权中间件
 	router.InitJWTAuth(us)

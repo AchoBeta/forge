@@ -40,6 +40,9 @@ cos:        # 腾讯云COS配置
   base_url: https://your-bucket-name.cos.ap-guangzhou.myqcloud.com
   sts_duration: 3600
 
+unioffice:    #文件解析apikey
+  metered_key: "your-key-here"
+
 
 sms:         # 短信验证码配置
   key:                         # 短信服务API Key/推送密钥   第三方:https://push.spug.cc/
