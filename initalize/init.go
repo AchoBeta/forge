@@ -18,13 +18,14 @@ import (
 	"forge/interface/handler"
 	"forge/interface/router"
 	"forge/pkg/log"
-
+	"github.com/unidoc/unioffice/v2/common/license"
 	// "forge/pkg/loop"
 	"forge/util"
 )
 
 func Init() {
 	// load env
+	license.SetMeteredKey("uniapi") //文件解析初始化44
 	path := initPath()
 	introduce()
 	log.InitLog(path, configs.Config())
