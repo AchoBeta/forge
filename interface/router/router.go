@@ -39,6 +39,7 @@ func RunServer() {
 func register() (router *gin.Engine) {
 	gin.SetMode(gin.DebugMode)
 	r := gin.Default()
+	r.Use(middleware.CorsMiddleware())
 	r.RouterGroup = *r.Group("/api/biz/v1", middleware.AddTracer())
 
 	// 用户服务：不需要JWT的路由（登录、注册、发送验证码、重置密码）
@@ -62,6 +63,7 @@ func register() (router *gin.Engine) {
 	cosGroup := r.Group("cos", jwtAuthMiddleware)
 	loadCOSService(cosGroup)
 
+	//ai路由组需要jwt鉴权
 	aiChat := r.Group("aichat", jwtAuthMiddleware)
 	loadAiChat(aiChat)
 

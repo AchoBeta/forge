@@ -200,7 +200,6 @@ func NewAiChatClient(apiKey, modelName string) repo.EinoServer {
 }
 
 func (a *AiChatClient) SendMessage(ctx context.Context, messages []*entity.Message) (types.AgentResponse, error) {
-
 	input := messagesDo2Input(messages)
 
 	resp, err := a.Agent.Invoke(ctx, input)

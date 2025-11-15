@@ -44,9 +44,13 @@ func (a *AiChatService) ProcessUserMessage(ctx context.Context, req *types.Proce
 	if err != nil {
 		return types.AgentResponse{}, err
 	}
+	//将数据写入ctx
+	ctx = entity.WithConversation(ctx, conversation)
 
+	//更新导图数据
+	conversation.UpdateMapData(req.MapData)
 	//更新导图提示词
-	conversation.ProcessSystemPrompt(req.MapData)
+	conversation.ProcessSystemPrompt()
 
 	//添加用户聊天记录
 	conversation.AddMessage(req.Message, entity.USER, "", nil)
@@ -79,12 +83,12 @@ func (a *AiChatService) SaveNewConversation(ctx context.Context, req *types.Save
 		return "", AI_CHAT_PERMISSION_DENIED
 	}
 
-	conversation, err := entity.NewConversation(user.UserID, req.MapID, req.Title)
+	conversation, err := entity.NewConversation(user.UserID, req.MapID, req.Title, req.MapData)
 	if err != nil {
 		return "", err
 	}
 	//初始化系统提示词
-	conversation.ProcessSystemPrompt(req.MapData)
+	conversation.ProcessSystemPrompt()
 
 	err = a.aiChatRepo.SaveConversation(ctx, conversation)
 	if err != nil {

@@ -81,9 +81,10 @@ func (h *Handler) GetConversation(ctx context.Context, req *def.GetConversationR
 	}
 
 	resp := &def.GetConversationResponse{
-		Success:  true,
-		Title:    conversation.Title,
-		Messages: conversation.Messages,
+		Success:        true,
+		Title:          conversation.Title,
+		Messages:       conversation.Messages,
+		ConversationID: conversation.ConversationID,
 	}
 
 	return resp, nil
