@@ -3,6 +3,7 @@ app:
   host: 127.0.0.1
   env: dev
   logfiles: /logs
+  your_frontend_domain: "*"
 
 database:
   driver: mysql
