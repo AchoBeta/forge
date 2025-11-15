@@ -20,6 +20,7 @@ type IConfig interface {
 	GetCOSConfig() COSConfig
 	GetAiChatConfig() AiChatConfig
 	GetSMSConfig() SMSConfig
+	GetUniOfficeConfig() UniOfficeConfig
 }
 
 var (
@@ -115,6 +116,8 @@ func mustInit(path string) *config {
 
 }
 
+func (c *config) GetUniOfficeConfig() UniOfficeConfig { return c.UniOfficeConfig }
+
 type config struct {
 	AppConfig       ApplicationConfig `mapstructure:"app"`
 	LogConfig       LoggerConfig      `mapstructure:"log"`
@@ -126,6 +129,7 @@ type config struct {
 	COSConfig       COSConfig         `mapstructure:"cos"`
 	AiChatConfig    AiChatConfig      `mapstructure:"ai_client"`
 	SMSConfig       SMSConfig         `mapstructure:"sms"`
+	UniOfficeConfig UniOfficeConfig   `mapstructure:"unioffice"`
 }
 
 type ApplicationConfig struct {
@@ -198,4 +202,8 @@ type AiChatConfig struct {
 type SMSConfig struct {
 	Key      string `mapstructure:"key"`
 	Endpoint string `mapstructure:"endpoint"`
+}
+
+type UniOfficeConfig struct {
+	MeteredKey string `mapstructure:"metered_key"`
 }
