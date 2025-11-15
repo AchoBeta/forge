@@ -87,7 +87,7 @@ func SaveNewConversation() gin.HandlerFunc {
 		if err := gCtx.ShouldBindJSON(&req); err != nil {
 			gCtx.JSON(http.StatusOK, response.JsonMsgResult{
 				Code:    response.PARAM_NOT_COMPLETE.Code,
-				Message: response.PARAM_NOT_COMPLETE.Msg,
+				Message: response.PARAM_NOT_COMPLETE.Msg + err.Error(),
 				Data:    def.SaveNewConversationResponse{Success: false},
 			})
 			return
