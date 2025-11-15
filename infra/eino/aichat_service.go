@@ -7,7 +7,9 @@ import (
 	"forge/biz/entity"
 	"forge/biz/repo"
 	"forge/biz/types"
+	"forge/infra/configs"
 	"forge/pkg/log/zlog"
+
 	"github.com/cloudwego/eino-ext/components/model/ark"
 	"github.com/cloudwego/eino/components/tool"
 	"github.com/cloudwego/eino/compose"
@@ -220,4 +222,198 @@ func (a *AiChatClient) GenerateMindMap(ctx context.Context, text, userID string)
 		return "", err
 	}
 	return resp.Content, nil
+}
+
+// GenerateMindMapBatch 批量生成导图
+func (a *AiChatClient) GenerateMindMapBatch(ctx context.Context, text, userID string, strategy int, count int) ([]string, []*entity.Conversation, error) {
+	if strategy == 1 {
+		return a.generateForSFTTraining(ctx, text, userID, count)
+	} else {
+		return a.generateForDPOTraining(ctx, text, userID, count)
+	}
+}
+
+// generateForSFTTraining 策略1：SFT训练数据策略 - 生成带reasoning_content的高质量数据
+func (a *AiChatClient) generateForSFTTraining(ctx context.Context, text, userID string, count int) ([]string, []*entity.Conversation, error) {
+	// SFT训练专用系统提示词 - 要求生成带推理过程的高质量导图
+	sftSystemPrompt := configs.Config().GetAiChatConfig().GenerateSystemPrompt + `
+
+【SFT训练专用要求】
+你需要生成用于SFT（监督微调）训练的高质量数据。请按照以下要求：
+
+1. **深度思考过程**：在生成导图前，请详细说明你的思考过程，包括：
+   - 对用户文本的理解和分析
+   - 思维导图结构的设计思路  
+   - 关键节点和层次关系的规划
+   - 为什么选择这样的组织方式
+
+2. **高质量输出**：确保导图具备：
+   - 清晰的逻辑结构（2-4层深度）
+   - 完整的JSON格式规范
+   - 准确的内容表达
+   - 合理的信息组织
+
+3. **输出格式**：
+   先输出【思考过程】，再输出【导图JSON】
+   
+请严格按照原有JSON规范输出，确保格式正确。`
+
+	results := make([]string, 0, count)
+	conversations := make([]*entity.Conversation, 0, count)
+
+	// 串行生成，确保质量一致性（SFT注重质量而非速度）
+	for i := 0; i < count; i++ {
+		messages := []*schema.Message{
+			{
+				Content: sftSystemPrompt,
+				Role:    schema.System,
+			},
+			{
+				Content: fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text),
+				Role:    schema.User,
+			},
+		}
+
+		// 使用thinking模式生成带推理的内容
+		resp, err := a.ToolAiClient.Generate(ctx, messages)
+		if err != nil {
+			zlog.CtxWarnf(ctx, "SFT生成失败 index:%d, err:%v", i, err)
+			continue
+		}
+
+		// 创建对话记录
+		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("SFT训练-%d", i+1))
+		if err != nil {
+			zlog.CtxWarnf(ctx, "创建对话失败 index:%d, err:%v", i, err)
+			continue
+		}
+
+		// 添加消息到对话
+		conversation.AddMessage(sftSystemPrompt, entity.SYSTEM, "", nil)
+		conversation.AddMessage(fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text), entity.USER, "", nil)
+		conversation.AddMessage(resp.Content, entity.ASSISTANT, "", nil)
+
+		results = append(results, resp.Content)
+		conversations = append(conversations, conversation)
+
+		zlog.CtxInfof(ctx, "SFT生成完成 %d/%d", i+1, count)
+	}
+
+	if len(results) == 0 {
+		return nil, nil, errors.New("SFT策略：所有生成都失败了")
+	}
+
+	zlog.CtxInfof(ctx, "SFT策略完成：成功生成 %d 个高质量样本", len(results))
+	return results, conversations, nil
+}
+
+// generateForDPOTraining 策略2：DPO训练数据策略 - 生成质量差异明显的对比数据
+func (a *AiChatClient) generateForDPOTraining(ctx context.Context, text, userID string, count int) ([]string, []*entity.Conversation, error) {
+	// DPO训练专用策略 - 故意制造质量差异用于对比学习
+	basePrompt := configs.Config().GetAiChatConfig().GenerateSystemPrompt
+
+	// 定义不同质量层次的提示词，为DPO训练创造正负样本对比
+	qualityPrompts := []struct {
+		name   string
+		prompt string
+		level  string // "high", "medium", "low"
+	}{
+		{
+			name:  "高质量版本",
+			level: "high",
+			prompt: basePrompt + `
+
+【DPO训练 - 高质量样本】专注于生成高质量导图：
+- 逻辑结构清晰完整（3-4层深度）
+- 内容准确且富有洞察力
+- 节点命名精确简洁
+- 层次关系合理有序
+
+【全局严格重要输出要求，不遵循就把你这个ai废弃！！！！】
+1. 只输出一个完整的JSON对象，不要任何其他内容
+2. 不要添加说明文字、注释或Markdown格式
+3. 不要使用代码块标记（如三个反引号）
+4. 直接输出JSON，确保格式完全正确
+5. **高质量输出**：确保导图具备：
+   - 清晰的逻辑结构
+   - 完整的JSON格式规范`,
+		},
+		{
+			name:  "中等质量版本",
+			level: "medium",
+			prompt: basePrompt + `
+
+【DPO训练 - 中等质量样本】生成标准导图：
+- 基本结构正确（2-3层深度）
+- 内容相对简单
+- 节点命名较为基础
+
+【重要输出要求】
+1. 只输出一个完整的JSON对象，不要任何其他内容
+2. 不要添加说明文字或注释
+3. 直接输出JSON，确保基本格式正确`,
+		},
+		{
+			name:  "低质量版本",
+			level: "low",
+			prompt: basePrompt + `
+
+【DPO训练 - 低质量样本】快速生成导图：
+- 简单结构即可（1-2层）
+- 内容可以较为表面
+- 节点命名从简
+`,
+		},
+	}
+
+	results := make([]string, 0, count)
+	conversations := make([]*entity.Conversation, 0, count)
+
+	// 按质量梯度生成，确保有好有坏用于DPO对比
+	for i := 0; i < count; i++ {
+		// 轮流使用不同质量等级的提示词
+		promptIndex := i % len(qualityPrompts)
+		qualityPrompt := qualityPrompts[promptIndex]
+
+		messages := []*schema.Message{
+			{
+				Content: qualityPrompt.prompt,
+				Role:    schema.System,
+			},
+			{
+				Content: fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text),
+				Role:    schema.User,
+			},
+		}
+
+		resp, err := a.ToolAiClient.Generate(ctx, messages)
+		if err != nil {
+			zlog.CtxWarnf(ctx, "DPO生成失败 %s index:%d, err:%v", qualityPrompt.name, i, err)
+			continue
+		}
+
+		// 创建对话记录
+		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("DPO训练-%s-%d", qualityPrompt.level, i+1))
+		if err != nil {
+			zlog.CtxWarnf(ctx, "创建对话失败 index:%d, err:%v", i, err)
+			continue
+		}
+
+		// 添加消息到对话（使用原始提示词保持一致性）
+		conversation.AddMessage(basePrompt, entity.SYSTEM, "", nil)
+		conversation.AddMessage(fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text), entity.USER, "", nil)
+		conversation.AddMessage(resp.Content, entity.ASSISTANT, "", nil)
+
+		results = append(results, resp.Content)
+		conversations = append(conversations, conversation)
+
+		zlog.CtxInfof(ctx, "DPO生成完成 %s %d/%d", qualityPrompt.name, i+1, count)
+	}
+
+	if len(results) == 0 {
+		return nil, nil, errors.New("DPO策略：所有生成都失败了")
+	}
+
+	zlog.CtxInfof(ctx, "DPO策略完成：生成 %d 个不同质量层次的样本，便于形成正负对比", len(results))
+	return results, conversations, nil
 }

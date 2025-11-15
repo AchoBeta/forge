@@ -9,6 +9,7 @@ import (
 	"forge/biz/repo"
 	"forge/infra/database"
 	"forge/infra/storage/po"
+
 	"gorm.io/gorm"
 )
 
@@ -22,7 +23,7 @@ func InitAiChatStorage() {
 	db := database.ForgeDB()
 
 	if err := db.AutoMigrate(&po.ConversationPO{}); err != nil {
-		panic(fmt.Sprintf("自动建表失败 :%w", err))
+		panic(fmt.Sprintf("自动建表失败 :%v", err))
 	}
 
 	cp = &aiChatPersistence{db: db}

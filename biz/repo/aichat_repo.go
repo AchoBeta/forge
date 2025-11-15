@@ -32,4 +32,7 @@ type EinoServer interface {
 
 	//生成导图
 	GenerateMindMap(ctx context.Context, text, userID string) (string, error)
+	
+	//批量生成导图
+	GenerateMindMapBatch(ctx context.Context, text, userID string, strategy int, count int) ([]string, []*entity.Conversation, error)
 }

@@ -3,8 +3,9 @@ package types
 import (
 	"context"
 	"forge/biz/entity"
-	"github.com/cloudwego/eino/schema"
 	"mime/multipart"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 type IAiChatService interface {
@@ -28,6 +29,9 @@ type IAiChatService interface {
 
 	//生成导图
 	GenerateMindMap(ctx context.Context, req *GenerateMindMapParams) (string, error)
+
+	//批量生成导图（Pro版本）
+	GenerateMindMapPro(ctx context.Context, req *GenerateMindMapProParams) (*entity.GenerationBatch, []*entity.GenerationResult, []*entity.Conversation, error)
 }
 
 type ProcessUserMessageParams struct {
@@ -69,4 +73,13 @@ type AgentResponse struct {
 type GenerateMindMapParams struct {
 	Text string
 	File *multipart.FileHeader
+}
+
+// GenerationResultWithParams 带生成参数的结果
+type GenerationResultWithParams struct {
+	JSON        string   // 生成的JSON
+	Temperature *float64 // 温度参数
+	TopP        *float64 // Top-P参数
+	Strategy    int      // 生成策略
+	Error       error    // 生成错误
 }

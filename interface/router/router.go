@@ -52,6 +52,7 @@ func register() (router *gin.Engine) {
 	// mindmap路由组需要JWT鉴权
 	mindMapGroup := r.Group("mindmap", jwtAuthMiddleware)
 	loadMindMapService(mindMapGroup)
+	loadGenerationService(mindMapGroup) // 添加生成相关路由
 
 	// cos路由组需要JWT鉴权
 	cosGroup := r.Group("cos", jwtAuthMiddleware)
