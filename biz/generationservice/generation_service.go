@@ -402,7 +402,10 @@ func (g *GenerationService) SaveSelectedMindMap(ctx context.Context, resultID st
 		return nil, fmt.Errorf("JSON中缺少root字段")
 	}
 
-	rootBytes, _ := json.Marshal(rootData)
+	rootBytes, err := json.Marshal(rootData)
+	if err != nil {
+		return nil, fmt.Errorf("序列化root数据失败: %w", err)
+	}
 	var mindMapData entity.MindMapData
 	if err := json.Unmarshal(rootBytes, &mindMapData); err != nil {
 		return nil, fmt.Errorf("解析root数据失败: %w", err)

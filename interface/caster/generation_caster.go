@@ -11,6 +11,7 @@ func CastGenerateMindMapProReq2Params(req *def.GenerateMindMapProReq) *types.Gen
 	params := &types.GenerateMindMapProParams{
 		Count:    req.Count,
 		Strategy: req.Strategy,
+		File:     req.File, // 修复：添加文件字段转换
 	}
 
 	if req.Text != nil {

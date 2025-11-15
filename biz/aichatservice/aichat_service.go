@@ -231,8 +231,11 @@ func (a *AiChatService) GenerateMindMapPro(ctx context.Context, req *types.Gener
 	}
 
 	// 5. 构建结果实体
+	strategy := req.Strategy // 优化：移出循环，避免重复赋值
 	generationResults := make([]*entity.GenerationResult, 0, len(results))
 	for i, result := range results {
+		now := time.Now() // 优化：每次迭代时记录时间，保证时间一致性
+
 		resultID, err := util.GenerateStringID()
 		if err != nil {
 			zlog.CtxWarnf(ctx, "生成结果ID失败: %v", err)
@@ -245,7 +248,6 @@ func (a *AiChatService) GenerateMindMapPro(ctx context.Context, req *types.Gener
 		}
 
 		// 验证JSON格式并处理
-		strategy := req.Strategy
 		var generationResult *entity.GenerationResult
 
 		// 根据策略提取JSON并验证格式
@@ -261,7 +263,6 @@ func (a *AiChatService) GenerateMindMapPro(ctx context.Context, req *types.Gener
 			zlog.CtxWarnf(ctx, "AI生成JSON反序列化失败，自动标记为负样本: %v, JSON: %s", err, displayJSON)
 
 			errorMessage := fmt.Sprintf("JSON反序列化失败: %v", err)
-			now := time.Now()
 			generationResult = &entity.GenerationResult{
 				ResultID:       resultID,
 				BatchID:        batchID,
@@ -269,7 +270,7 @@ func (a *AiChatService) GenerateMindMapPro(ctx context.Context, req *types.Gener
 				MapJSON:        extractedJSON, // 保存提取的JSON（即使格式错误）
 				Label:          -1,            // 自动标记为负样本
 				LabeledAt:      &now,          // 设置标记时间
-				CreatedAt:      time.Now(),
+				CreatedAt:      now,           // 优化：使用循环开始时的时间
 				Strategy:       &strategy,
 				ErrorMessage:   &errorMessage, // 记录具体错误信息
 			}
@@ -282,7 +283,7 @@ func (a *AiChatService) GenerateMindMapPro(ctx context.Context, req *types.Gener
 				ConversationID: conversationID,
 				MapJSON:        extractedJSON, // 保存提取的有效JSON
 				Label:          0,             // 默认未标记，等待用户手动标记
-				CreatedAt:      time.Now(),
+				CreatedAt:      now,           // 优化：使用循环开始时的时间
 				Strategy:       &strategy,
 			}
 		}

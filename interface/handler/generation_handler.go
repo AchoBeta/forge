@@ -33,7 +33,8 @@ func (h *Handler) GenerateMindMapPro(ctx context.Context, req *def.GenerateMindM
 		return
 	}
 
-	if req.Text == nil || strings.TrimSpace(*req.Text) == "" {
+	// 修复：检查Text和File至少提供一个
+	if (req.Text == nil || strings.TrimSpace(*req.Text) == "") && req.File == nil {
 		err = ErrInvalidParams
 		return
 	}
