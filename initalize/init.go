@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"forge/biz/aichatservice"
 	"forge/biz/cosservice"
+	"forge/biz/generationservice"
 	"forge/biz/mindmapservice"
 	"forge/biz/userservice"
 	"forge/infra/cache"
@@ -46,6 +47,7 @@ func Init() {
 	storage.InitUserStorage()
 	storage.InitMindMapStorage()
 	storage.InitAiChatStorage()
+	storage.InitGenerationStorage() // 初始化生成相关存储
 
 	// snowflake - 从配置文件读取节点ID
 	snowflakeConfig := configs.Config().GetSnowflakeConfig()
@@ -70,7 +72,11 @@ func Init() {
 	// 依赖注入: 创建ai服务实例
 	aiConfig := configs.Config().GetAiChatConfig()
 	acs := aichatservice.NewAiChatService(storage.GetAiChatPersistence(), eino.NewAiChatClient(aiConfig.ApiKey, aiConfig.ModelName))
-	handler.MustInitHandler(us, mms, cs, acs)
+
+	// 依赖注入: 创建generation服务实例
+	gs := generationservice.NewGenerationService(storage.GetGenerationPersistence(), storage.GetAiChatPersistence(), storage.GetMindMapPersistence())
+
+	handler.MustInitHandler(us, mms, cs, acs, gs)
 
 	//从配置文件中读取解析文件apikey
 	uniOfficeConfig := configs.Config().GetUniOfficeConfig()
