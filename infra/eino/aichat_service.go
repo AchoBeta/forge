@@ -281,7 +281,7 @@ func (a *AiChatClient) generateForSFTTraining(ctx context.Context, text, userID 
 		}
 
 		// 创建对话记录
-		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("SFT训练-%d", i+1))
+		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("SFT训练-%d", i+1), "")
 		if err != nil {
 			zlog.CtxWarnf(ctx, "创建对话失败 index:%d, err:%v", i, err)
 			continue
@@ -392,14 +392,14 @@ func (a *AiChatClient) generateForDPOTraining(ctx context.Context, text, userID 
 		}
 
 		// 创建对话记录
-		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("DPO训练-%s-%d", qualityPrompt.level, i+1))
+		conversation, err := entity.NewConversation(userID, "BATCH_GENERATION", fmt.Sprintf("DPO训练-%s-%d", qualityPrompt.level, i+1), "")
 		if err != nil {
 			zlog.CtxWarnf(ctx, "创建对话失败 index:%d, err:%v", i, err)
 			continue
 		}
 
-		// 添加消息到对话（使用原始提示词保持一致性）
-		conversation.AddMessage(basePrompt, entity.SYSTEM, "", nil)
+		// 添加消息到对话（使用实际生成时的提示词保持一致性）
+		conversation.AddMessage(qualityPrompt.prompt, entity.SYSTEM, "", nil)
 		conversation.AddMessage(fmt.Sprintf("userID请填写：%s \n用户文本：%s", userID, text), entity.USER, "", nil)
 		conversation.AddMessage(resp.Content, entity.ASSISTANT, "", nil)
 

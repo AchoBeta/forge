@@ -156,6 +156,7 @@ func (g *GenerationService) buildSFTRecord(conversation *entity.Conversation, la
 	}
 
 	var messages []SFTMessage
+	var hasReasoningContent bool
 
 	// 处理每条消息
 	for i, message := range conversation.Messages {
@@ -164,19 +165,26 @@ func (g *GenerationService) buildSFTRecord(conversation *entity.Conversation, la
 			Content: message.Content,
 		}
 
-		// 设置loss_weight
+		// 设置loss_weight（SFT只使用正样本，label必为1）
 		if sftMessage.Role == "assistant" && i == len(conversation.Messages)-1 {
 			// 只有最后一条assistant消息才设置loss_weight
-			if label == 1 {
-				lossWeight := 1.0
-				sftMessage.LossWeight = &lossWeight
-			} else if label == -1 {
-				lossWeight := 0.0
-				sftMessage.LossWeight = &lossWeight
+			lossWeight := 1.0
+			sftMessage.LossWeight = &lossWeight
+
+			// 提取思考过程内容（SFT训练要求）
+			reasoningContent := g.extractReasoningContent(message.Content)
+			if reasoningContent != "" {
+				sftMessage.ReasoningContent = &reasoningContent
+				hasReasoningContent = true
 			}
 		}
 
 		messages = append(messages, sftMessage)
+	}
+
+	// SFT训练数据必须包含思考过程
+	if !hasReasoningContent {
+		return nil, fmt.Errorf("SFT样本缺少思考过程，不符合训练要求")
 	}
 
 	// 构建完整记录
@@ -186,6 +194,39 @@ func (g *GenerationService) buildSFTRecord(conversation *entity.Conversation, la
 	}
 
 	return record, nil
+}
+
+// extractReasoningContent 从assistant消息中提取思考过程
+func (g *GenerationService) extractReasoningContent(content string) string {
+	// SFT生成的内容格式：先输出【思考过程】，再输出【导图JSON】
+	// 需要提取【思考过程】部分作为reasoning_content
+
+	// 查找思考过程的标记
+	thinkingStart := strings.Index(content, "【思考过程】")
+	if thinkingStart == -1 {
+		// 尝试其他可能的标记格式
+		thinkingStart = strings.Index(content, "思考过程")
+		if thinkingStart == -1 {
+			return ""
+		}
+	}
+
+	// 查找JSON开始的位置（通常以{开始）
+	jsonStart := strings.Index(content[thinkingStart:], "{")
+	if jsonStart == -1 {
+		// 如果没找到JSON，返回从思考过程开始的所有内容
+		return strings.TrimSpace(content[thinkingStart:])
+	}
+
+	// 提取思考过程部分（从标记开始到JSON之前）
+	reasoningContent := strings.TrimSpace(content[thinkingStart : thinkingStart+jsonStart])
+
+	// 清理内容，移除标记符号
+	reasoningContent = strings.ReplaceAll(reasoningContent, "【思考过程】", "")
+	reasoningContent = strings.ReplaceAll(reasoningContent, "【导图JSON】", "")
+	reasoningContent = strings.TrimSpace(reasoningContent)
+
+	return reasoningContent
 }
 
 // ExportDPOData 导出DPO数据
@@ -210,67 +251,185 @@ func (g *GenerationService) ExportDPOData(ctx context.Context, startDate, endDat
 
 	// 为每个批次生成DPO对比对
 	for batchID, results := range batchGroups {
-		// 分离正负样本
+		// 分离正负样本（只处理DPO策略生成的数据）
 		positiveResults := g.selectPositiveSamples(ctx, results, batchID)
 		var negativeResults []*entity.GenerationResult
 
 		for _, result := range results {
-			if result.Label == -1 {
+			// 只选择DPO策略生成的负样本 (label = -1 且 strategy = 2)
+			if result.Label == -1 && result.Strategy != nil && *result.Strategy == 2 {
 				negativeResults = append(negativeResults, result)
 			}
 		}
 
-		// 生成正负样本对（限制配对数量，避免数据爆炸）
-		maxPairsPerPositive := 3 // 每个正样本最多配对3个负样本
-		for _, positive := range positiveResults {
-			pairCount := 0
-			for _, negative := range negativeResults {
-				if pairCount >= maxPairsPerPositive {
-					break // 限制配对数量
-				}
-				dpoRecord, err := g.buildDPORecord(ctx, positive, negative, userID)
-				if err != nil {
-					zlog.CtxWarnf(ctx, "构建DPO记录失败 batchID:%s, err:%v", batchID, err)
-					continue
-				}
-				dpoRecords = append(dpoRecords, dpoRecord)
-				pairCount++
-			}
-			zlog.CtxInfof(ctx, "批次 %s：正样本 %s 生成了 %d 个DPO配对", batchID, positive.ResultID, pairCount)
+		// 检查是否有足够的正负样本进行配对
+		if len(positiveResults) == 0 {
+			zlog.CtxWarnf(ctx, "批次 %s：没有正样本，跳过DPO配对", batchID)
+			continue
 		}
+		if len(negativeResults) == 0 {
+			zlog.CtxWarnf(ctx, "批次 %s：没有负样本，跳过DPO配对", batchID)
+			continue
+		}
+
+		// 智能配对策略：优先配对质量差异明显的样本
+		pairs := g.generateOptimalDPOPairs(ctx, positiveResults, negativeResults, batchID)
+
+		for _, pair := range pairs {
+			dpoRecord, err := g.buildDPORecord(ctx, pair.positive, pair.negative, userID)
+			if err != nil {
+				zlog.CtxWarnf(ctx, "构建DPO记录失败 batchID:%s, positive:%s, negative:%s, err:%v",
+					batchID, pair.positive.ResultID, pair.negative.ResultID, err)
+				continue
+			}
+			dpoRecords = append(dpoRecords, dpoRecord)
+		}
+
+		zlog.CtxInfof(ctx, "批次 %s：生成了 %d 个DPO配对（正样本:%d, 负样本:%d）",
+			batchID, len(pairs), len(positiveResults), len(negativeResults))
 	}
 
 	return strings.Join(dpoRecords, "\n"), nil
 }
 
-// selectPositiveSamples 选择正样本（简化版）
+// selectPositiveSamples 选择DPO正样本（按策略过滤）
 func (g *GenerationService) selectPositiveSamples(ctx context.Context, results []*entity.GenerationResult, batchID string) []*entity.GenerationResult {
 	var positiveResults []*entity.GenerationResult
 
-	// 收集所有正样本 (label = 1)
+	// 收集DPO策略生成的正样本 (label = 1 且 strategy = 2)
 	for _, result := range results {
-		if result.Label == 1 {
+		if result.Label == 1 && result.Strategy != nil && *result.Strategy == 2 {
 			positiveResults = append(positiveResults, result)
 		}
 	}
 
-	zlog.CtxInfof(ctx, "批次 %s：选择正样本 %d 个", batchID, len(positiveResults))
+	zlog.CtxInfof(ctx, "批次 %s：选择DPO策略正样本 %d 个", batchID, len(positiveResults))
 	return positiveResults
 }
 
-// selectSFTSamples 选择SFT正样本（简化版）
+// selectSFTSamples 选择SFT正样本（按策略过滤）
 func (g *GenerationService) selectSFTSamples(ctx context.Context, results []*entity.GenerationResult) []*entity.GenerationResult {
 	var positiveResults []*entity.GenerationResult
 
-	// SFT只使用正样本 (label = 1)
+	// SFT只使用正样本 (label = 1) 且必须是SFT策略生成的数据 (strategy = 1)
 	for _, result := range results {
-		if result.Label == 1 {
+		if result.Label == 1 && result.Strategy != nil && *result.Strategy == 1 {
 			positiveResults = append(positiveResults, result)
 		}
 	}
 
-	zlog.CtxInfof(ctx, "SFT导出：选择正样本 %d 个", len(positiveResults))
+	zlog.CtxInfof(ctx, "SFT导出：选择SFT策略正样本 %d 个", len(positiveResults))
 	return positiveResults
+}
+
+// DPOPair DPO配对结构
+type DPOPair struct {
+	positive *entity.GenerationResult
+	negative *entity.GenerationResult
+}
+
+// generateOptimalDPOPairs 生成最优DPO配对
+func (g *GenerationService) generateOptimalDPOPairs(ctx context.Context, positiveResults, negativeResults []*entity.GenerationResult, batchID string) []DPOPair {
+	var pairs []DPOPair
+
+	// 配对策略：
+	// 1. 每个正样本最多配对3个负样本，避免数据爆炸
+	// 2. 优先选择时间相近的样本（同一批次内生成时间相近的样本更具可比性）
+	// 3. 如果有策略信息，优先配对不同策略生成的样本
+
+	maxPairsPerPositive := 3
+	if len(negativeResults) < 3 {
+		maxPairsPerPositive = len(negativeResults) // 如果负样本不足3个，则全部配对
+	}
+
+	for _, positive := range positiveResults {
+		// 为当前正样本选择最佳的负样本
+		selectedNegatives := g.selectBestNegativesForPositive(positive, negativeResults, maxPairsPerPositive)
+
+		for _, negative := range selectedNegatives {
+			pairs = append(pairs, DPOPair{
+				positive: positive,
+				negative: negative,
+			})
+		}
+	}
+
+	zlog.CtxDebugf(ctx, "批次 %s：智能配对完成，正样本 %d 个，负样本 %d 个，生成配对 %d 个",
+		batchID, len(positiveResults), len(negativeResults), len(pairs))
+
+	return pairs
+}
+
+// selectBestNegativesForPositive 为正样本选择最佳负样本
+func (g *GenerationService) selectBestNegativesForPositive(positive *entity.GenerationResult, negativeResults []*entity.GenerationResult, maxCount int) []*entity.GenerationResult {
+	if len(negativeResults) <= maxCount {
+		return negativeResults // 如果负样本数量不超过限制，全部返回
+	}
+
+	// 计算每个负样本与正样本的匹配度分数
+	type scoredNegative struct {
+		result *entity.GenerationResult
+		score  float64
+	}
+
+	var scored []scoredNegative
+
+	for _, negative := range negativeResults {
+		score := g.calculatePairScore(positive, negative)
+		scored = append(scored, scoredNegative{
+			result: negative,
+			score:  score,
+		})
+	}
+
+	// 按分数排序，选择最佳的几个
+	// 这里使用简单的选择排序，因为数量不大
+	for i := 0; i < len(scored)-1; i++ {
+		for j := i + 1; j < len(scored); j++ {
+			if scored[j].score > scored[i].score {
+				scored[i], scored[j] = scored[j], scored[i]
+			}
+		}
+	}
+
+	// 取前maxCount个
+	var selected []*entity.GenerationResult
+	for i := 0; i < maxCount && i < len(scored); i++ {
+		selected = append(selected, scored[i].result)
+	}
+
+	return selected
+}
+
+// calculatePairScore 计算正负样本配对的匹配度分数
+func (g *GenerationService) calculatePairScore(positive, negative *entity.GenerationResult) float64 {
+	score := 0.0
+
+	// 1. 时间相近性（同一批次内时间越近越好）
+	timeDiff := positive.CreatedAt.Sub(negative.CreatedAt)
+	if timeDiff < 0 {
+		timeDiff = -timeDiff
+	}
+	// 时间差越小分数越高，最大1分
+	timeScore := 1.0 - float64(timeDiff.Minutes())/60.0 // 假设1小时内的时间差为满分
+	if timeScore < 0 {
+		timeScore = 0
+	}
+	score += timeScore
+
+	// 2. 策略差异性（如果有策略信息，不同策略的配对更有价值）
+	if positive.Strategy != nil && negative.Strategy != nil {
+		if *positive.Strategy != *negative.Strategy {
+			score += 1.0 // 不同策略加1分
+		}
+	}
+
+	// 3. 错误信息差异（有错误的负样本与无错误的正样本配对更有价值）
+	if positive.ErrorMessage == nil && negative.ErrorMessage != nil {
+		score += 0.5 // 错误差异加0.5分
+	}
+
+	return score
 }
 
 // buildDPORecord 构建DPO记录
@@ -279,6 +438,17 @@ func (g *GenerationService) buildDPORecord(ctx context.Context, positive, negati
 	positiveConversation, err := g.aiChatRepo.GetConversation(ctx, positive.ConversationID, userID)
 	if err != nil {
 		return "", fmt.Errorf("获取正样本对话失败: %w", err)
+	}
+
+	// 获取负样本对话用于校验
+	negativeConversation, err := g.aiChatRepo.GetConversation(ctx, negative.ConversationID, userID)
+	if err != nil {
+		return "", fmt.Errorf("获取负样本对话失败: %w", err)
+	}
+
+	// 校验正负样本的输入一致性（system和user消息应该相同）
+	if err := g.validateConversationConsistency(positiveConversation, negativeConversation); err != nil {
+		return "", fmt.Errorf("正负样本对话不一致: %w", err)
 	}
 
 	// 构建DPO格式记录
@@ -314,6 +484,50 @@ func (g *GenerationService) buildDPORecord(ctx context.Context, positive, negati
 	}
 
 	return string(jsonBytes), nil
+}
+
+// validateConversationConsistency 校验正负样本对话的输入一致性
+func (g *GenerationService) validateConversationConsistency(positive, negative *entity.Conversation) error {
+	// 检查消息数量（至少要有system和user消息）
+	if len(positive.Messages) < 2 || len(negative.Messages) < 2 {
+		return fmt.Errorf("对话消息数量不足")
+	}
+
+	// 校验非assistant消息的一致性
+	positiveInputs := make([]*entity.Message, 0)
+	negativeInputs := make([]*entity.Message, 0)
+
+	for _, msg := range positive.Messages {
+		if msg.Role != entity.ASSISTANT {
+			positiveInputs = append(positiveInputs, msg)
+		}
+	}
+
+	for _, msg := range negative.Messages {
+		if msg.Role != entity.ASSISTANT {
+			negativeInputs = append(negativeInputs, msg)
+		}
+	}
+
+	// 检查输入消息数量是否一致
+	if len(positiveInputs) != len(negativeInputs) {
+		return fmt.Errorf("正负样本输入消息数量不一致: positive=%d, negative=%d", len(positiveInputs), len(negativeInputs))
+	}
+
+	// 校验每条输入消息的内容是否一致
+	for i, posMsg := range positiveInputs {
+		negMsg := negativeInputs[i]
+		if posMsg.Role != negMsg.Role {
+			return fmt.Errorf("第%d条消息角色不一致: positive=%s, negative=%s", i+1, posMsg.Role, negMsg.Role)
+		}
+		// 对于DPO训练，我们允许system消息有所不同（因为可能使用不同质量的提示词）
+		// 但user消息必须完全一致
+		if posMsg.Role == entity.USER && posMsg.Content != negMsg.Content {
+			return fmt.Errorf("第%d条用户消息内容不一致", i+1)
+		}
+	}
+
+	return nil
 }
 
 // DPORecord DPO训练记录结构
