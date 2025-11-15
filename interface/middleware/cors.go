@@ -11,6 +11,6 @@ func CorsMiddleware() gin.HandlerFunc {
 		AllowOrigins:  []string{"*"},
 		AllowMethods:  []string{"GET", "POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS"},
 		AllowHeaders:  []string{"Origin", "Content-Length", "Content-Type", "Authorization"},
-		ExposeHeaders: []string{"Content-Length,Authorization"},
+		ExposeHeaders: []string{"Content-Length", "Authorization"},
 	})
 }

@@ -16,7 +16,7 @@ var (
 	TOOL      = "tool"
 )
 
-type AiChatCtxKey struct{}
+type aiChatCtxKey struct{}
 
 type Message struct {
 	Content    string            `json:"content"`
@@ -100,11 +100,11 @@ func (c *Conversation) ProcessSystemPrompt() {
 }
 
 func WithConversation(ctx context.Context, conversation *Conversation) context.Context {
-	ctx = context.WithValue(ctx, AiChatCtxKey{}, conversation)
+	ctx = context.WithValue(ctx, aiChatCtxKey{}, conversation)
 	return ctx
 }
 
 func GetConversation(ctx context.Context) (*Conversation, bool) {
-	v, ok := ctx.Value(AiChatCtxKey{}).(*Conversation)
+	v, ok := ctx.Value(aiChatCtxKey{}).(*Conversation)
 	return v, ok
 }
